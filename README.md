@@ -3,7 +3,6 @@
 [![Target](https://img.shields.io/badge/Target-STM32F411RET6%20(Nucleo--64)-blue.svg)](https://www.st.com/en/evaluation-tools/nucleo-f411re.html)
 [![Architecture](https://img.shields.io/badge/Architecture-Bare--Metal%20CMSIS-green.svg)]()
 [![Standard](https://img.shields.io/badge/Standard-Toyota%20MISRA--C%20(22%20Rules)-red.svg)]()
-[![License](https://img.shields.io/badge/License-MIT-lightgrey.svg)]()
 
 A high-performance, bare-metal **Real-Time 8-Voice Diatonic Synthesizer and 64-Step Hardware Sequencer** developed for the **STMicroelectronics STM32F411RET6** (Nucleo-F411RE, ARM Cortex-M4F @ 16 MHz). 
 
@@ -219,9 +218,3 @@ All C source code strictly adheres to the **22 Toyota Embedded MISRA-C Rules**:
 - **No Ternary Operator**: The `? :` construct is completely banned in favor of explicit `if / else`.
 - **Complete Branch Coverage**: All `if ... else if` chains terminate with an explicit `else` block; all `switch` statements include a mandatory `default:` clause.
 - **Strict Hungarian Notation**: Variables prefixed by type (`u1t_`, `u2t_`, `u4t_`, `s1t_`, `s2t_`, `s4t_`, `b_`, `c_`, `g_`, `p_`).
-
----
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.

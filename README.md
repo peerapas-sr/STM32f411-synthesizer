@@ -209,7 +209,7 @@ The project is strictly compiled with:
 
 ## Toyota MISRA-C Compliance
 
-All C source code strictly adheres to the **22 Toyota Embedded MISRA-C Rules**:
+All C source code strictly adheres to the **MISRA-C Rules**:
 - **Zero single-line comments**: Enforces standard `/* ... */` block comments exclusively.
 - **Strict Brace Discipline**: Opening and closing braces on their own separate lines.
 - **No Magic Numbers**: All constants are defined using explicit `#define` with typed suffixes (`U`, `UL`).

@@ -2,11 +2,10 @@
 
 [![Target](https://img.shields.io/badge/Target-STM32F411RET6%20(Nucleo--64)-blue.svg)](https://www.st.com/en/evaluation-tools/nucleo-f411re.html)
 [![Architecture](https://img.shields.io/badge/Architecture-Bare--Metal%20CMSIS-green.svg)]()
-[![Standard](https://img.shields.io/badge/Standard-Toyota%20MISRA--C%20(22%20Rules)-red.svg)]()
 
 A high-performance, bare-metal **Real-Time 8-Voice Diatonic Synthesizer and 64-Step Hardware Sequencer** developed for the **STMicroelectronics STM32F411RET6** (Nucleo-F411RE, ARM Cortex-M4F @ 16 MHz). 
 
-Built without heavy vendor HAL libraries using direct CMSIS register manipulation, featuring autonomous **Zero-CPU DMA subsystems**, an interrupt-driven audio engine, a real-time 1.30" I2C OLED virtual piano interface, and 100% compliance with the **22 Toyota Embedded MISRA-C safety rules**.
+Built without heavy vendor HAL libraries using direct CMSIS register manipulation, featuring autonomous **Zero-CPU DMA subsystems**, an interrupt-driven audio engine, a real-time 1.30" I2C OLED virtual piano interface
 
 ---
 
@@ -29,7 +28,6 @@ Built without heavy vendor HAL libraries using direct CMSIS register manipulatio
 - **Serial Interactive Console**:
   - USART2 @ 115,200 bps with an interrupt-driven RX ring buffer.
   - Supports remote piano keyboard input (`'1'`–`'8'`), status telemetry, and recording controls.
-- **100% Toyota MISRA-C Compliant**: Zero magic numbers, strict Hungarian notation, complete branch coverage, and zero compiler warnings under `-Wall -Wextra -Werror`.
 
 ---
 

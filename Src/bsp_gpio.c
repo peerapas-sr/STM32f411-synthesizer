@@ -1,6 +1,6 @@
 /*******************************************************************************
  * File Name   : bsp_gpio.c
- * Description : 4 Keys (PA10 + EXTI10, PB3, PB5, PB4), Joystick SW (PC2), Red LED (PA6)
+ * Description : 4 Keys (PA10, PB3, PB5, PB4), Joystick SW (PC2 + EXTI2), Red LED (PA6)
  * Target MCU  : STM32F411RET6 (Nucleo-F411RE)
  * Standard    : Toyota Embedded MISRA-C Compliant (22 Rules)
  ******************************************************************************/
@@ -10,9 +10,10 @@
 #include "stm32f4xx.h"
 
 /* Named Constants (Rule 5 & Rule 10) */
-#define EXTI10_NVIC_PRIORITY    (2U)
-#define EXTI_LINE_10_MASK       (1UL << KEY1_PIN)
-#define EXTICR3_LINE10_MASK     (0x0FUL << 8U)     /* EXTICR[2] bits 11:8 = 0 selects Port A */
+#define EXTI2_NVIC_PRIORITY     (2U)
+#define EXTI_LINE_2_MASK        (1UL << JOY_SW_PIN)
+#define EXTICR1_LINE2_MASK      (0x0FUL << 8U)     /* EXTICR[0] bits 11:8 select the port of line 2 */
+#define EXTICR1_LINE2_PORTC     (0x02UL << 8U)     /* 0x2 = Port C */
 #define LED_RED_MODE_MASK       (3UL << (LED_RED_PIN * 2U))
 #define LED_RED_OUTPUT_MODE     (1UL << (LED_RED_PIN * 2U))
 #define KEY1_MODE_MASK          (3UL << (KEY1_PIN * 2U))
@@ -22,7 +23,7 @@
 #define JOY_SW_MODE_MASK        (3UL << (JOY_SW_PIN * 2U))
 #define JOY_SW_PULL_UP          (1UL << (JOY_SW_PIN * 2U))
 
-static volatile bool g_b_exti10_flag = false;
+static volatile bool g_b_joy_sw_exti_flag = false;
 
 void bsp_gpio_init(void)
 {
@@ -43,13 +44,13 @@ void bsp_gpio_init(void)
     GPIOC->MODER &= ~JOY_SW_MODE_MASK;
     GPIOC->PUPDR = (GPIOC->PUPDR & ~JOY_SW_MODE_MASK) | JOY_SW_PULL_UP;
 
-    /* EXTI Line 10 on PA10: falling edge (key press, active low) */
-    SYSCFG->EXTICR[2] &= ~EXTICR3_LINE10_MASK;
-    EXTI->IMR  |= EXTI_LINE_10_MASK;
-    EXTI->FTSR |= EXTI_LINE_10_MASK;
-    EXTI->RTSR &= ~EXTI_LINE_10_MASK;
-    NVIC_SetPriority(EXTI15_10_IRQn, EXTI10_NVIC_PRIORITY);
-    NVIC_EnableIRQ(EXTI15_10_IRQn);
+    /* EXTI Line 2 on PC2 (Joystick SW): falling edge (press, active low) */
+    SYSCFG->EXTICR[0] = (SYSCFG->EXTICR[0] & ~EXTICR1_LINE2_MASK) | EXTICR1_LINE2_PORTC;
+    EXTI->IMR  |= EXTI_LINE_2_MASK;
+    EXTI->FTSR |= EXTI_LINE_2_MASK;
+    EXTI->RTSR &= ~EXTI_LINE_2_MASK;
+    NVIC_SetPriority(EXTI2_IRQn, EXTI2_NVIC_PRIORITY);
+    NVIC_EnableIRQ(EXTI2_IRQn);
 }
 
 /* Raw key bitmask, pressed = 1 (Bit 0: Key 1, Bit 1: Key 2, Bit 2: Key 3, Bit 3: Key 4) */
@@ -83,20 +84,20 @@ void bsp_gpio_led_red_set(bool b_state)
 
 bool bsp_gpio_get_exti_flag(void)
 {
-    return g_b_exti10_flag;
+    return g_b_joy_sw_exti_flag;
 }
 
 void bsp_gpio_clear_exti_flag(void)
 {
-    g_b_exti10_flag = false;
+    g_b_joy_sw_exti_flag = false;
 }
 
-/* EXTI Lines 10..15 ISR: Key 1 (PA10) pressed */
-void EXTI15_10_IRQHandler(void)
+/* EXTI Line 2 ISR: Joystick SW (PC2) pressed */
+void EXTI2_IRQHandler(void)
 {
-    if ((EXTI->PR & EXTI_LINE_10_MASK) != 0U)
+    if ((EXTI->PR & EXTI_LINE_2_MASK) != 0U)
     {
-        EXTI->PR = EXTI_LINE_10_MASK;    /* Write 1 to clear pending */
-        g_b_exti10_flag = true;
+        EXTI->PR = EXTI_LINE_2_MASK;    /* Write 1 to clear pending */
+        g_b_joy_sw_exti_flag = true;
     }
 }

@@ -137,7 +137,7 @@ Headers (Inc/*.h)	210	110	-100	-47.6%	มาโครที่ไม่ได้
    - USART2: Handled by `USART2_IRQHandler` (RXNE buffer `g_c_rx_buffer`, TXE buffer `g_c_tx_buffer`). Never introduce polling `while(!(USART2->SR & ...))`.
    - ADC1: Triggered autonomously by TIM3 TRGO into DMA2 Stream 0 circular buffer. Never call `bsp_adc_read()` or poll `ADC_SR_EOC`.
 3. **EXTI Invariant**:
-   - PA10 Key 1 triggers `EXTI15_10_IRQHandler` setting `g_b_exti10_flag`.
+   - PC2 Joystick SW triggers `EXTI2_IRQHandler` setting `g_b_joy_sw_exti_flag` (moved from PA10 / EXTI10).
 4. **Option A UI Invariant**:
    - 1.30" SH1106 OLED displays Virtual Piano keyboard (8 white keys + 5 black keys).
    - Invert-fill for active keys accelerated using Page-Byte stride optimization (Pages 3..7, 70 byte writes).
@@ -157,7 +157,7 @@ Headers (Inc/*.h)	210	110	-100	-47.6%	มาโครที่ไม่ได้
 ---
 
 ## 5. Pass 2 Result (Claude Code)
-- Total: **3,284 -> 1,993 lines (-40%)**. See `CLAUDE.md` "Current Status" for the per-file table.
+- Total: **3,284 -> 1,994 lines (-40%)**. See `CLAUDE.md` "Current Status" for the per-file table.
 - Build 0 errors / 0 compiler warnings; `verify_misra.py` 0 violations; UART (RXNE/TXE ISR) and ADC (TIM3 TRGO + DMA2) still zero polling.
 - Features kept: 8 notes + bank switch, pitch bend, vibrato, 150 ms sustain, record / loop playback, K1+K4 / K2+K3 combos, UART commands and telemetry, OLED Virtual Piano with page-byte stride.
 - Behaviour changes: combo-skew note purge only on the K1+K4 combo; toggling playback while recording saves the recording first; `c` returns to live mode before clearing; `P:+`/`P:-` pixel dot removed; OLED shows a cleared screen until the first frame; startup chime notes are all 50 ms.

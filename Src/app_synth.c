@@ -594,7 +594,7 @@ void app_synth_run(void)
 
         if (bsp_gpio_get_exti_flag() == true)
         {
-            bsp_gpio_clear_exti_flag();    /* Key 1 EXTI event; the key itself is read by the debouncer */
+            bsp_gpio_clear_exti_flag();    /* Joystick SW EXTI event; the switch itself is read by the debouncer */
         }
         bsp_joystick_service(u4t_now);
         synth_handle_uart_rx(u4t_now);

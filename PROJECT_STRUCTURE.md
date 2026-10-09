@@ -28,7 +28,7 @@ graph TD
         AppSynth --> BSP_BUZZER[bsp_buzzer.c: Tone Generation]
         AppSynth --> BSP_JOY[bsp_joystick.c: EMA Filtering + Norm]
         AppSynth --> BSP_UART[bsp_uart.c: USART2 RXNE/TXE Interrupts]
-        AppSynth --> BSP_GPIO[bsp_gpio.c: 4 Keys, SW, LED, EXTI10]
+        AppSynth --> BSP_GPIO[bsp_gpio.c: 4 Keys, SW, LED, EXTI2]
         AppSynth --> BSP_TIMER[bsp_timer.c: TIM3 1 ms Tick + TRGO]
     end
 
@@ -38,7 +38,7 @@ graph TD
         BSP_TIMER --> TIM3[TIM3 Timer TRGO @ 1 kHz]
         BSP_UART --> USART2[USART2 @ 115200 bps]
         BSP_BUZZER --> TIM4_CH2[PB7 TIM4_CH2 Hardware PWM]
-        BSP_GPIO --> EXTI10[EXTI Line 10 on PA10]
+        BSP_GPIO --> EXTI2[EXTI Line 2 on PC2]
     end
 ```
 
@@ -59,7 +59,7 @@ graph TD
 | [`Inc/bsp_joystick.h`](file:///z:/Embedsystemtoyota/Project/Inc/bsp_joystick.h) | BSP | APIs: `bsp_joystick_service(uint32_t u4t_now)`, `bsp_joystick_get_norm_x(void)`, `bsp_joystick_get_norm_y(void)`, `bsp_joystick_get_event(void)`. |
 | [`Src/bsp_timer.c`](file:///z:/Embedsystemtoyota/Project/Src/bsp_timer.c) | BSP | TIM3 hardware timer (1 kHz TRGO trigger) and non-blocking millisecond tick / microsecond delay utilities (`bsp_delay_us()`, `bsp_delay_ms()`). |
 | [`Inc/bsp_timer.h`](file:///z:/Embedsystemtoyota/Project/Inc/bsp_timer.h) | BSP | APIs: `bsp_timer_init(void)`, `bsp_timer_get_ms(void)`, `bsp_delay_us(uint32_t u4t_us)`, `bsp_delay_ms(uint32_t u4t_ms)`. |
-| [`Src/bsp_gpio.c`](file:///z:/Embedsystemtoyota/Project/Src/bsp_gpio.c) | BSP | GPIO initialization: 4 Keys (PA10, PB3, PB5, PB4), HW-504 SW (PC2), Red LED (PA6), and EXTI Line 10 interrupt on PA10. `bsp_gpio_read_keys()` is branchless (bit-shift of inverted IDR). |
+| [`Src/bsp_gpio.c`](file:///z:/Embedsystemtoyota/Project/Src/bsp_gpio.c) | BSP | GPIO initialization: 4 Keys (PA10, PB3, PB5, PB4), HW-504 SW (PC2), Red LED (PA6), and EXTI Line 2 interrupt on PC2 (Joystick SW). `bsp_gpio_read_keys()` is branchless (bit-shift of inverted IDR). |
 | [`Inc/bsp_gpio.h`](file:///z:/Embedsystemtoyota/Project/Inc/bsp_gpio.h) | BSP | APIs: `bsp_gpio_init(void)`, `bsp_gpio_read_keys(void)`, `bsp_gpio_read_joystick_switch(void)`, `bsp_gpio_led_red_set(bool b_state)`, `bsp_gpio_get_exti_flag()`, `bsp_gpio_clear_exti_flag()`. |
 | [`Src/bsp_buzzer.c`](file:///z:/Embedsystemtoyota/Project/Src/bsp_buzzer.c) | BSP | Audio generation: PB7 Hardware PWM (TIM4_CH2) tone generation with quadratic volume pulse shaping. |
 | [`Inc/bsp_buzzer.h`](file:///z:/Embedsystemtoyota/Project/Inc/bsp_buzzer.h) | BSP | APIs: `bsp_buzzer_init(void)`, `bsp_buzzer_set_tone(uint32_t u4t_freq_hz, uint16_t u2t_vol_adc)`, `bsp_buzzer_off(void)`. |
@@ -80,11 +80,11 @@ graph TD
 | **ADC1_IN11** | **PC1** | Analog Mode | HW-504 Joystick VRy (Down: High Bank, Up: Vibrato up to ±50 Cents, TIM3 TRGO DMA2) |
 | **USART2_TX** | **PA2** | AF7 (Push-Pull, Very High Speed) | Serial Telemetry & UI status mirror @ 115200 bps |
 | **USART2_RX** | **PA3** | AF7 (Pull-Up) | Serial Input Commands (RXNE Interrupt Ring Buffer) |
-| **Key 1** | **PA10**| Input Pull-Up + EXTI10 Falling Edge | Note 1 (DO / SOL) / Record Toggle Combo Key (with Key 4) |
+| **Key 1** | **PA10**| Input Pull-Up | Note 1 (DO / SOL) / Record Toggle Combo Key (with Key 4) |
 | **Key 2** | **PB3** | Input Pull-Up | Note 2 (RE / LA) / Playback Toggle Combo Key (with Key 3) |
 | **Key 3** | **PB5** | Input Pull-Up | Note 3 (MI / TI) / Playback Toggle Combo Key (with Key 2) |
 | **Key 4** | **PB4** | Input Pull-Up | Note 4 (FA / HIGH DO) / Record Toggle Combo Key (with Key 1) |
-| **Joy SW** | **PC2** | Input Pull-Up | HW-504 Center Push Switch (Short/Long click debounce FSM) |
+| **Joy SW** | **PC2** | Input Pull-Up + EXTI2 Falling Edge | HW-504 Center Push Switch (Short/Long click debounce FSM) |
 | **Buzzer** | **PB7** | AF2 (TIM4_CH2, Push-Pull, High Speed) | Hardware PWM Audio Tone Generator with Quadratic Volume Duty Modulation |
 | **Red LED** | **PA6** | Output Push-Pull | Recording Mode Flash / Note & Sustain Indicator / Combo Feedback |
 

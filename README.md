@@ -54,7 +54,7 @@ graph TD
         BSP_Joy[bsp_joystick.c: EMA Filter + Normalization]
         BSP_UART[bsp_uart.c: USART2 115.2k Ring Buffer]
         BSP_Timer[bsp_timer.c: 1ms Timebase & TRGO Engine]
-        BSP_GPIO[bsp_gpio.c: Keys, SW, LED & EXTI10]
+        BSP_GPIO[bsp_gpio.c: Keys, SW, LED & EXTI2]
     end
 
     subgraph STM32F411_Hardware [STM32F411RE Hardware Peripherals]
@@ -63,7 +63,7 @@ graph TD
         ADC1_DMA2[ADC1 + DMA2 Stream 0 Ch 0]
         TIM3[TIM3: 1 kHz Master TRGO & 1 ms Tick]
         USART2[USART2 RXNE/TXE Interrupt]
-        EXTI10[EXTI Line 10 on PA10]
+        EXTI2[EXTI Line 2 on PC2]
     end
 
     MainLoop --> SeqFSM
@@ -85,7 +85,7 @@ graph TD
     BSP_ADC --> ADC1_DMA2
     BSP_Timer --> TIM3
     BSP_UART --> USART2
-    BSP_GPIO --> EXTI10
+    BSP_GPIO --> EXTI2
 ```
 
 ---
@@ -101,11 +101,11 @@ graph TD
 | **ADC1_IN11** | **PC1** | Analog Mode | HW-504 Joystick VRy (Down: High Bank, Up: Vibrato) |
 | **USART2_TX** | **PA2** | AF7 (Push-Pull, Pull-Up, Very High Speed) | Serial Telemetry & Console @ 115,200 bps |
 | **USART2_RX** | **PA3** | AF7 (Pull-Up, Very High Speed) | Serial Remote Commands (RXNE Interrupt) |
-| **Key 1** | **PA10** | Input Pull-Up + EXTI10 Falling Edge | Note 1 (DO / SOL) & Record Combo Key |
+| **Key 1** | **PA10** | Input Pull-Up | Note 1 (DO / SOL) & Record Combo Key |
 | **Key 2** | **PB3** | Input Pull-Up | Note 2 (RE / LA) & Playback Combo Key |
 | **Key 3** | **PB5** | Input Pull-Up | Note 3 (MI / TI) & Playback Combo Key |
 | **Key 4** | **PB4** | Input Pull-Up | Note 4 (FA / HIGH DO) & Record Combo Key |
-| **Joystick SW** | **PC2** | Input Pull-Up | HW-504 Center Push Switch (Short/Long click) |
+| **Joystick SW** | **PC2** | Input Pull-Up + EXTI2 Falling Edge | HW-504 Center Push Switch (Short/Long click) |
 | **Buzzer Out** | **PB7** | AF2 (TIM4_CH2, Push-Pull, Very High Speed) | Hardware PWM Audio Output with Quadratic Volume Pulse Shaping |
 | **Red LED** | **PA6** | Output Push-Pull | On while a note sounds (incl. sustain tail), blinks every 200 ms while recording |
 
@@ -119,7 +119,7 @@ To ensure zero audio glitching and eliminate CPU stalls, interrupts are strictly
 | :--- | :--- | :---: | :--- | :--- |
 | **`DMA1_Stream6_IRQn`** | `DMA1_Stream6_IRQHandler` | **2** | DMA1 Transfer Complete | Releases I2C DMA lock, halts DMA, issues hardware STOP condition. |
 | **`USART2_IRQn`** | `USART2_IRQHandler` | **2** | USART2 `RXNE` / `TXE` | RX: pushes bytes into a 64-byte ring buffer. TX: drains a 256-byte ring buffer, disables `TXEIE` when empty. |
-| **`EXTI15_10_IRQn`** | `EXTI15_10_IRQHandler` | **2** | PA10 Falling Edge | Latches Key 1 press event flag for the main application loop. |
+| **`EXTI2_IRQn`** | `EXTI2_IRQHandler` | **2** | PC2 Falling Edge | Latches Joystick SW press event flag for the main application loop. |
 | **`TIM3_IRQn`** | `TIM3_IRQHandler` | **3** | TIM3 Update (1 kHz) | Increments system millisecond counter `g_u4t_system_ms`. |
 | *DMA2 Stream 0* | *(No Interrupt)* | — | TIM3 TRGO Pulse | **Circular Mode**: Transfers 3 ADC conversions directly into SRAM. |
 | *TIM4 Channel 2* | *(No Interrupt)* | — | Hardware Counter | **Hardware PWM**: Autonomous square-wave audio on PB7 (Zero-CPU). |
@@ -181,7 +181,7 @@ Example telemetry (every note uses the same format):
 │   ├── app_synth.h        # Synthesizer FSM & sequencer declarations
 │   ├── bsp_adc.h          # 3-Channel ADC & DMA2 driver interface
 │   ├── bsp_buzzer.h       # Audio pulse shaper & tone engine interface
-│   ├── bsp_gpio.h         # GPIO pin configurations & EXTI10 interface
+│   ├── bsp_gpio.h         # GPIO pin configurations & EXTI2 interface
 │   ├── bsp_joystick.h     # HW-504 EMA filter & debounce FSM interface
 │   ├── bsp_oled.h         # OLED graphics, virtual piano & I2C DMA interface
 │   ├── bsp_timer.h        # TIM3 timebase & delay utilities
@@ -191,7 +191,7 @@ Example telemetry (every note uses the same format):
 │   ├── app_synth.c        # Synthesizer application logic & sequencer FSM
 │   ├── bsp_adc.c          # ADC1 + TIM3 TRGO + DMA2 circular engine
 │   ├── bsp_buzzer.c       # Hardware PWM tone & volume pulse shaper (PB7 / TIM4_CH2)
-│   ├── bsp_gpio.c         # GPIO setup, LED control & EXTI15_10 ISR
+│   ├── bsp_gpio.c         # GPIO setup, LED control & EXTI2 ISR
 │   ├── bsp_joystick.c     # Joystick EMA filtering, deadzone & switch FSM
 │   ├── bsp_oled.c         # 1024B Framebuffer, I2C1 bus recovery & DMA ISR
 │   ├── bsp_timer.c        # TIM3 1ms tick & microsecond delays

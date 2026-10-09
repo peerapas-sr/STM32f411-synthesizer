@@ -8,7 +8,7 @@
  *   [1] GPIO                  : 4 Keys In (PA10, PB3, PB5, PB4), HW-504 SW (PC2), Red LED (PA6)
  *   [2] UART (Interrupt)      : USART2 115200 bps via RXNE/TXE Interrupt ring buffers (NO Polling)
  *   [3] ADC (Interrupt/DMA)   : 3-Channel ADC1 via TIM3 TRGO & DMA2 Stream 0 (Zero CPU)
- *   [4] External Interrupt    : EXTI Line 10 on PA10 [Key 1]
+ *   [4] External Interrupt    : EXTI Line 2 on PC2 [Joystick SW]
  *   [5] Additional Peripheral : TIM3 Hardware Timer 1ms Periodic Interrupt & TRGO Output
  *   [6] MISRA-C Compliance    : 22 Toyota Rules fully enforced
  *   [7] Software Structure    : Clean Separation of Application and BSP Drivers
@@ -42,7 +42,7 @@ int main(void)
     __ISB();
 
     /* 1. Initialize Board Support Package (Drivers) */
-    bsp_gpio_init();     /* 4 Keys, HW-504 SW (PC2) & EXTI10 on PA10 */
+    bsp_gpio_init();     /* 4 Keys, HW-504 SW (PC2) & EXTI2 on PC2 */
     bsp_buzzer_init();   /* Hardware PWM Buzzer on PB7 (TIM4_CH2) */
     bsp_adc_init();      /* 3-Channel ADC1 via TIM3 TRGO & DMA2 Stream 0 */
     bsp_uart_init();     /* USART2 with RXNE/TXE Interrupts (No Polling) */

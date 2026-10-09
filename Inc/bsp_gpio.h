@@ -10,12 +10,12 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define KEY1_PIN          (10UL) /* PA10 (D2) Key 1: Do / Sol + EXTI10 */
+#define KEY1_PIN          (10UL) /* PA10 (D2) Key 1: Do / Sol */
 #define KEY2_PIN          (3UL)  /* PB3  (D3) Key 2: Re / La */
 #define KEY3_PIN          (5UL)  /* PB5  (D4) Key 3: Mi / Ti */
 #define KEY4_PIN          (4UL)  /* PB4  (D5) Key 4: Fa / High Do */
 #define LED_RED_PIN       (6UL)  /* PA6  (D12) Red status LED */
-#define JOY_SW_PIN        (2UL)  /* PC2  (A2) Joystick center push button */
+#define JOY_SW_PIN        (2UL)  /* PC2  (A2) Joystick center push button + EXTI2 */
 
 void bsp_gpio_init(void);
 uint8_t bsp_gpio_read_keys(void);

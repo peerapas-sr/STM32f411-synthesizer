@@ -18,12 +18,12 @@
 #define USART2_NVIC_PRIORITY    (2U)
 
 /* Circular RX buffer managed by Interrupt Service Routine */
-static volatile char     g_u1t_rx_buffer[UART_RX_BUFFER_SIZE];
+static volatile char     g_c_rx_buffer[UART_RX_BUFFER_SIZE];
 static volatile uint8_t  g_u1t_rx_head = 0U;
 static volatile uint8_t  g_u1t_rx_tail = 0U;
 
 /* Circular TX buffer managed by Interrupt Service Routine */
-static volatile char     g_u1t_tx_buffer[UART_TX_BUFFER_SIZE];
+static volatile char     g_c_tx_buffer[UART_TX_BUFFER_SIZE];
 static volatile uint16_t g_u2t_tx_head = 0U;
 static volatile uint16_t g_u2t_tx_tail = 0U;
 
@@ -64,7 +64,7 @@ void bsp_uart_send_char(char c_val)
     /* Enqueue character if space is available */
     if (u2t_next_head != g_u2t_tx_tail)
     {
-        g_u1t_tx_buffer[g_u2t_tx_head] = c_val;
+        g_c_tx_buffer[g_u2t_tx_head] = c_val;
         g_u2t_tx_head = u2t_next_head;
 
         /* Enable TXE interrupt: ISR will shift byte out to USART_DR automatically */
@@ -94,6 +94,33 @@ void bsp_uart_send_string(const char *p_str)
     }
 }
 
+/* Transmit 32-bit unsigned integer as ASCII decimal string */
+void bsp_uart_send_dec(uint32_t u4t_val)
+{
+    char c_buf[11];
+    uint32_t u4t_temp = u4t_val;
+    uint8_t u1t_pos = 0U;
+
+    if (u4t_temp == 0U)
+    {
+        bsp_uart_send_char('0');
+    }
+    else
+    {
+        while (u4t_temp > 0U)
+        {
+            c_buf[u1t_pos] = (char)('0' + (u4t_temp % 10U));
+            u4t_temp /= 10U;
+            u1t_pos++;
+        }
+        while (u1t_pos > 0U)
+        {
+            u1t_pos--;
+            bsp_uart_send_char(c_buf[u1t_pos]);
+        }
+    }
+}
+
 /* Check if character available in RX buffer */
 bool bsp_uart_has_rx_char(void)
 {
@@ -106,7 +133,7 @@ char bsp_uart_get_rx_char(void)
     char c_char = '\0';
     if (g_u1t_rx_head != g_u1t_rx_tail)
     {
-        c_char = g_u1t_rx_buffer[g_u1t_rx_tail];
+        c_char = g_c_rx_buffer[g_u1t_rx_tail];
         g_u1t_rx_tail = (uint8_t)((g_u1t_rx_tail + 1U) % UART_RX_BUFFER_SIZE);
     }
     else
@@ -128,7 +155,7 @@ void USART2_IRQHandler(void)
         /* Prevent buffer overflow */
         if (u1t_next_head != g_u1t_rx_tail)
         {
-            g_u1t_rx_buffer[g_u1t_rx_head] = c_rx_byte;
+            g_c_rx_buffer[g_u1t_rx_head] = c_rx_byte;
             g_u1t_rx_head = u1t_next_head;
         }
         else
@@ -146,7 +173,7 @@ void USART2_IRQHandler(void)
     {
         if (g_u2t_tx_head != g_u2t_tx_tail)
         {
-            USART2->DR = (uint16_t)((uint8_t)g_u1t_tx_buffer[g_u2t_tx_tail]);
+            USART2->DR = (uint16_t)((uint8_t)g_c_tx_buffer[g_u2t_tx_tail]);
             g_u2t_tx_tail = (uint16_t)((g_u2t_tx_tail + 1U) % UART_TX_BUFFER_SIZE);
         }
         else

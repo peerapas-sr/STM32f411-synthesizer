@@ -14,6 +14,7 @@
 void bsp_uart_init(void);
 void bsp_uart_send_char(char c_val);
 void bsp_uart_send_string(const char *p_str);
+void bsp_uart_send_dec(uint32_t u4t_val);
 bool bsp_uart_has_rx_char(void);
 char bsp_uart_get_rx_char(void);
 

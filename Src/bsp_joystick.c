@@ -15,8 +15,9 @@
 /* Named Constants (Rule 5 & Rule 10) */
 #define JOY_CENTER_VAL          (2048U)
 #define JOY_DEADZONE_COUNTS     (160U)
-#define JOY_MAX_ADC             (4095U)
 #define JOY_NORM_MAX            (1000)
+#define JOY_SPAN_POS            (1887U) /* 4095 - (2048 + 160) */
+#define JOY_SPAN_NEG            (1888U) /* 2048 - 160 */
 
 #define SW_HOLD_MS              (600U)
 #define SW_DEBOUNCE_MS          (30U)
@@ -40,7 +41,7 @@ static uint32_t         g_u4t_sw_press_start_ms = 0U;
 static bool             g_b_sw_long_fired = false;
 static joy_sw_event_t   g_joy_sw_event = JOY_SW_EVT_NONE;
 
-/* Helper: Piecewise deadzone normalization to -1000..+1000 */
+/* Helper: Precomputed dual-span deadzone normalization to -1000..+1000 */
 static int32_t joystick_calc_norm(uint16_t u2t_ema, uint16_t u2t_center)
 {
     int32_t s4t_norm = 0;
@@ -48,15 +49,11 @@ static int32_t joystick_calc_norm(uint16_t u2t_ema, uint16_t u2t_center)
 
     if (s4t_diff > (int32_t)JOY_DEADZONE_COUNTS)
     {
-        uint32_t u4t_span = (uint32_t)(JOY_MAX_ADC - (u2t_center + JOY_DEADZONE_COUNTS));
-        uint32_t u4t_delta = (uint32_t)(s4t_diff - (int32_t)JOY_DEADZONE_COUNTS);
-        s4t_norm = (int32_t)((u4t_delta * (uint32_t)JOY_NORM_MAX) / u4t_span);
+        s4t_norm = ((s4t_diff - (int32_t)JOY_DEADZONE_COUNTS) * JOY_NORM_MAX) / (int32_t)JOY_SPAN_POS;
     }
     else if (s4t_diff < -(int32_t)JOY_DEADZONE_COUNTS)
     {
-        uint32_t u4t_span = (uint32_t)(u2t_center - JOY_DEADZONE_COUNTS);
-        uint32_t u4t_delta = (uint32_t)(-s4t_diff - (int32_t)JOY_DEADZONE_COUNTS);
-        s4t_norm = -(int32_t)((u4t_delta * (uint32_t)JOY_NORM_MAX) / u4t_span);
+        s4t_norm = ((s4t_diff + (int32_t)JOY_DEADZONE_COUNTS) * JOY_NORM_MAX) / (int32_t)JOY_SPAN_NEG;
     }
     else
     {
@@ -218,9 +215,4 @@ joy_sw_event_t bsp_joystick_get_event(void)
     joy_sw_event_t evt_ret = g_joy_sw_event;
     g_joy_sw_event = JOY_SW_EVT_NONE; /* Clear on read */
     return evt_ret;
-}
-
-bool bsp_joystick_is_pressed(void)
-{
-    return g_b_sw_debounced;
 }

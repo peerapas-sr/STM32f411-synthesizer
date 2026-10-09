@@ -28,13 +28,17 @@
 #include "bsp_oled.h"
 #include "app_synth.h"
 
+/* Named Constants (Rule 5 & Rule 10) */
+#define SCB_CPACR_CP10_FULL_ACCESS  (3UL << 20U)
+#define SCB_CPACR_CP11_FULL_ACCESS  (3UL << 22U)
+
 /* System Clock definition required by CMSIS */
 uint32_t SystemCoreClock = 16000000U;
 
 int main(void)
 {
     /* 0. Enable Cortex-M4 Hardware FPU Coprocessors CP10 & CP11 (Full Access) */
-    SCB->CPACR |= ((3UL << (10U * 2U)) | (3UL << (11U * 2U)));
+    SCB->CPACR |= (SCB_CPACR_CP10_FULL_ACCESS | SCB_CPACR_CP11_FULL_ACCESS);
     __DSB();
     __ISB();
 

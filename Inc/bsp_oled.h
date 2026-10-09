@@ -33,12 +33,10 @@ void bsp_oled_draw_hline(uint8_t u1t_x0, uint8_t u1t_x1, uint8_t u1t_y, bool b_c
 void bsp_oled_draw_vline(uint8_t u1t_x, uint8_t u1t_y0, uint8_t u1t_y1, bool b_color);
 void bsp_oled_fill_rect(uint8_t u1t_x0, uint8_t u1t_y0, uint8_t u1t_x1, uint8_t u1t_y1, bool b_color);
 
-/* Theme 2: Virtual Piano UI Renderers */
-void bsp_oled_render_piano_keyboard(int8_t s1t_active_key);
-void bsp_oled_render_header(const char *p_mode, bool b_high_bank, uint8_t u1t_vol_pct, int8_t s1t_note, int32_t s4t_cents);
+/* Virtual Piano UI Renderers */
+void bsp_oled_render_piano_keyboard(int8_t s1t_active_key, const char * const pp_labels[OLED_PIANO_NUM_KEYS]);
+void bsp_oled_render_header(const char *p_mode, bool b_high_bank, uint8_t u1t_vol_pct,
+                           const char *p_note_name, const char *p_note_freq, int32_t s4t_cents);
 void bsp_oled_render_pitch_gauge(int32_t s4t_norm_x);
-
-/* I2C1 DMA Interrupt Service Routine */
-void DMA1_Stream6_IRQHandler(void);
 
 #endif /* BSP_OLED_H */

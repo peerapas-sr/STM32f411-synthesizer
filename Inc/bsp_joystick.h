@@ -26,6 +26,5 @@ void           bsp_joystick_service(uint32_t u4t_now);
 int32_t        bsp_joystick_get_norm_x(void);
 int32_t        bsp_joystick_get_norm_y(void);
 joy_sw_event_t bsp_joystick_get_event(void);
-bool           bsp_joystick_is_pressed(void);
 
 #endif /* BSP_JOYSTICK_H */

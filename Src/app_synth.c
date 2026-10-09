@@ -53,11 +53,12 @@
 #define VIBRATO_MAX_CENTS           (50)
 #define TOTAL_CENTS_CLAMP           (250)
 #define LFO_PERIOD_MS               (200U)
-#define BEND_POLY_SCALE_Q16         (65536)
-#define BEND_POLY_ROUND_Q16         (32768)
-#define BEND_POLY_COEFF_B           (38)
-#define BEND_POLY_COEFF_A           (11)
-#define BEND_POLY_DIVISOR           (1024)
+#define PITCH_TABLE_STEP_CENTS      (25U)
+#define PITCH_TABLE_OFFSET_CENTS    (250)
+#define PITCH_TABLE_MAX_SHIFT       (500)
+#define PITCH_TABLE_NUM_POINTS      (21U)
+#define PITCH_TABLE_LAST_IDX        (20U)
+#define PITCH_Q12_SHIFT             (12U)
 
 /* State Machine Types */
 typedef enum {
@@ -79,7 +80,23 @@ static const uint32_t NOTE_FREQ[SYNTH_NUM_NOTES] = {
 
 static const char *NOTE_NAMES[SYNTH_NUM_NOTES] = {
     "C7 (DO)", "D7 (RE)", "E7 (MI)", "F7 (FA)",
-    "G7 (SO)", "A7 (LA)", "B7 (TI)", "C8 (DO+)"
+    "G7 (SO)", "A7 (LA)", "B7 (TI)", "C8 (DO)"
+};
+
+static const char *NOTE_FREQS[SYNTH_NUM_NOTES] = {
+    "2093H", "2349H", "2637H", "2794H",
+    "3136H", "3520H", "3951H", "4186H"
+};
+
+static const char *KEY_LABELS[SYNTH_NUM_NOTES] = {
+    "DO", "RE", "MI", "FA", "SO", "LA", "TI", "C8"
+};
+
+/* 21-Point Q12 Pitch Ratio Table: [-250, +250] cents in 25-cent increments */
+static const uint16_t PITCH_RATIO_Q12[PITCH_TABLE_NUM_POINTS] = {
+    3545U, 3597U, 3649U, 3702U, 3756U, 3811U, 3866U, 3922U, 3979U, 4037U,
+    4096U,
+    4156U, 4216U, 4277U, 4340U, 4403U, 4467U, 4532U, 4598U, 4664U, 4732U
 };
 
 /* Sequencer Memory and Application State */
@@ -109,8 +126,8 @@ static bool             g_b_play_in_note_phase = false;
 /* Sound Modulation Tracker */
 static uint32_t         g_u4t_lfo_start_ms = 0U;
 
-/* Key Debounce Trackers (Leading-edge zero-latency with 20ms bounce lockout) */
-static bool             g_b_key_state[4] = {false, false, false, false};
+/* Unified 4-Bit Key Debounce Tracker */
+static uint8_t          g_u1t_debounced_keys = 0U;
 static uint32_t         g_u4t_key_lockout_ms[4] = {0U, 0U, 0U, 0U};
 
 /* Breadboard Combos (K1+K4: Rec, K2+K3: Play) */
@@ -122,33 +139,6 @@ static bool             g_b_combo_play_taken = false;
 /* Note Sustain / Release Tail Tracker */
 static int8_t           g_s1t_sustain_note = -1;
 static uint32_t         g_u4t_sustain_end_ms = 0U;
-
-/* Helper: Send unsigned decimal integer over UART */
-static void synth_uart_send_dec(uint32_t u4t_val)
-{
-    char c_buf[12];
-    int32_t s4t_idx = 0;
-    uint32_t u4t_rem = u4t_val;
-
-    if (u4t_rem == 0U)
-    {
-        bsp_uart_send_char('0');
-    }
-    else
-    {
-        while ((u4t_rem > 0U) && (s4t_idx < 11))
-        {
-            c_buf[s4t_idx] = (char)('0' + (u4t_rem % 10U));
-            s4t_idx++;
-            u4t_rem = u4t_rem / 10U;
-        }
-
-        for (int32_t s4t_i = s4t_idx - 1; s4t_i >= 0; s4t_i--)
-        {
-            bsp_uart_send_char(c_buf[s4t_i]);
-        }
-    }
-}
 
 /* Helper: Unified Note Telemetry Output */
 static void synth_uart_log_note(const char *p_prefix, int8_t s1t_note, uint32_t u4t_val, const char *p_unit)
@@ -163,7 +153,7 @@ static void synth_uart_log_note(const char *p_prefix, int8_t s1t_note, uint32_t 
         bsp_uart_send_string("UNKNOWN");
     }
     bsp_uart_send_string(" (");
-    synth_uart_send_dec(u4t_val);
+    bsp_uart_send_dec(u4t_val);
     bsp_uart_send_string(p_unit);
     bsp_uart_send_string(")\r\n");
 }
@@ -171,11 +161,11 @@ static void synth_uart_log_note(const char *p_prefix, int8_t s1t_note, uint32_t 
 /* Helper: Chime and Chirp Sounds */
 static void synth_play_status_tone(uint32_t u4t_first_freq, uint32_t u4t_second_freq)
 {
-    bsp_buzzer_play_chunk(u4t_first_freq, CHIME_NOTE_VOL_RAW);
+    bsp_buzzer_set_tone(u4t_first_freq, CHIME_NOTE_VOL_RAW);
     bsp_delay_ms(CHIRP_DELAY_MS);
     if (u4t_second_freq != STATUS_TONE_NONE_FREQ)
     {
-        bsp_buzzer_play_chunk(u4t_second_freq, CHIME_NOTE_VOL_RAW);
+        bsp_buzzer_set_tone(u4t_second_freq, CHIME_NOTE_VOL_RAW);
         bsp_delay_ms(CHIRP_DELAY_MS);
     }
     else
@@ -248,7 +238,7 @@ static void synth_seq_stop_recording(uint32_t u4t_now)
     bsp_gpio_led_red_set(false);
     synth_play_status_tone(CHIME_NOTE_G6_FREQ, CHIME_NOTE_C6_FREQ);
     bsp_uart_send_string("[RECORDER] Stopped & Saved! Total steps: ");
-    synth_uart_send_dec((uint32_t)g_u2t_seq_count);
+    bsp_uart_send_dec((uint32_t)g_u2t_seq_count);
     bsp_uart_send_string("\r\n");
 }
 
@@ -277,7 +267,7 @@ static void synth_seq_start_playback(void)
         g_b_play_in_note_phase = true;
         g_u4t_play_step_start_ms = bsp_timer_get_ms();
         bsp_uart_send_string("[PLAYBACK] Looping ");
-        synth_uart_send_dec((uint32_t)g_u2t_seq_count);
+        bsp_uart_send_dec((uint32_t)g_u2t_seq_count);
         bsp_uart_send_string(" notes (Press K2+K3, Joy SW, or 'p' to stop)...\r\n");
     }
 }
@@ -304,6 +294,20 @@ static void synth_cmd_toggle_recording(uint32_t u4t_now)
 
     if (g_recorder_mode == RECORDER_RECORDING)
     {
+        /* Cancel in-progress note started by asymmetric combo finger arrival */
+        g_b_rec_is_note_active = false;
+        g_s1t_rec_current_note = -1;
+
+        /* If transient finger skew note was appended just before combo hold, purge it */
+        if ((g_u2t_seq_count > 0U) && ((u4t_now - g_u4t_rec_last_release_ms) <= (COMBO_HOLD_MS + 100U)))
+        {
+            g_u2t_seq_count--;
+        }
+        else
+        {
+            /* Legitimate recorded sequence */
+        }
+
         synth_seq_stop_recording(u4t_now);
     }
     else
@@ -333,21 +337,29 @@ static void synth_cmd_short_press(uint32_t u4t_now)
 }
 
 /* Helper: Debounce 4 Piano Keys with asymmetric leading-edge and bounce lockout */
-static void synth_debounce_keys(uint32_t u4t_now, bool *p_k1, bool *p_k2, bool *p_k3, bool *p_k4)
+/* Helper: Debounce 4 Keys into unified 4-bit bitmask with independent lockout timers */
+static uint8_t synth_debounce_keys(uint32_t u4t_now)
 {
-    bool b_raw[4];
-    b_raw[0] = *p_k1;
-    b_raw[1] = *p_k2;
-    b_raw[2] = *p_k3;
-    b_raw[3] = *p_k4;
+    uint8_t u1t_raw = bsp_gpio_read_keys();
 
     for (uint8_t u1t_i = 0U; u1t_i < 4U; u1t_i++)
     {
-        if (b_raw[u1t_i] != g_b_key_state[u1t_i])
+        uint8_t u1t_bit = (uint8_t)(1U << u1t_i);
+        bool b_raw = ((u1t_raw & u1t_bit) != 0U);
+        bool b_deb = ((g_u1t_debounced_keys & u1t_bit) != 0U);
+
+        if (b_raw != b_deb)
         {
             if ((u4t_now - g_u4t_key_lockout_ms[u1t_i]) >= KEY_LOCKOUT_MS)
             {
-                g_b_key_state[u1t_i] = b_raw[u1t_i];
+                if (b_raw == true)
+                {
+                    g_u1t_debounced_keys |= u1t_bit;
+                }
+                else
+                {
+                    g_u1t_debounced_keys &= (uint8_t)(~u1t_bit);
+                }
                 g_u4t_key_lockout_ms[u1t_i] = u4t_now;
             }
             else
@@ -361,17 +373,14 @@ static void synth_debounce_keys(uint32_t u4t_now, bool *p_k1, bool *p_k2, bool *
         }
     }
 
-    *p_k1 = g_b_key_state[0];
-    *p_k2 = g_b_key_state[1];
-    *p_k3 = g_b_key_state[2];
-    *p_k4 = g_b_key_state[3];
+    return g_u1t_debounced_keys;
 }
 
 /* Helper: Compact combo hold timer updater */
-static void synth_check_combo(uint32_t u4t_now, bool b_k1, bool b_k2, bool b_k3, bool b_k4)
+static void synth_check_combo(uint32_t u4t_now, uint8_t u1t_keys)
 {
-    bool b_rec_combo = ((b_k1 == true) && (b_k4 == true));
-    bool b_play_combo = ((b_k2 == true) && (b_k3 == true));
+    bool b_rec_combo = ((u1t_keys & 0x09U) == 0x09U);   /* K1 + K4 */
+    bool b_play_combo = ((u1t_keys & 0x06U) == 0x06U);  /* K2 + K3 */
 
     if (b_rec_combo == true)
     {
@@ -421,11 +430,11 @@ static void synth_check_combo(uint32_t u4t_now, bool b_k1, bool b_k2, bool b_k3,
 }
 
 /* Sample Active Key Note from Breadboard and Joystick Bank with Release Sustain */
-static int8_t synth_read_active_note(bool b_k1, bool b_k2, bool b_k3, bool b_k4, uint32_t u4t_now)
+static int8_t synth_read_active_note(uint8_t u1t_keys, int32_t s4t_norm_y, uint32_t u4t_now)
 {
     int8_t s1t_note = -1;
 
-    if (((b_k1 == true) && (b_k4 == true)) || ((b_k2 == true) && (b_k3 == true)))
+    if (((u1t_keys & 0x09U) == 0x09U) || ((u1t_keys & 0x06U) == 0x06U))
     {
         s1t_note = -1; /* Combo held: suppress single-note sound */
         g_s1t_sustain_note = -1;
@@ -434,7 +443,7 @@ static int8_t synth_read_active_note(bool b_k1, bool b_k2, bool b_k3, bool b_k4,
     else
     {
         int8_t s1t_bank = 0;
-        if (bsp_joystick_get_norm_y() <= JOY_HIGH_BANK_THRESHOLD)
+        if (s4t_norm_y <= JOY_HIGH_BANK_THRESHOLD)
         {
             s1t_bank = 4;
         }
@@ -443,17 +452,16 @@ static int8_t synth_read_active_note(bool b_k1, bool b_k2, bool b_k3, bool b_k4,
             s1t_bank = 0;
         }
 
-        const bool b_keys[4] = {b_k1, b_k2, b_k3, b_k4};
-        for (int8_t s1t_i = 0; s1t_i < 4; s1t_i++)
+        for (uint8_t u1t_i = 0U; u1t_i < 4U; u1t_i++)
         {
-            if (b_keys[s1t_i] == true)
+            if ((u1t_keys & (uint8_t)(1U << u1t_i)) != 0U)
             {
-                s1t_note = (int8_t)(s1t_i + s1t_bank);
+                s1t_note = (int8_t)((int8_t)u1t_i + s1t_bank);
                 break;
             }
             else
             {
-                /* Check next button */
+                /* Check next key bit */
             }
         }
 
@@ -512,15 +520,49 @@ static int8_t synth_read_active_note(bool b_k1, bool b_k2, bool b_k3, bool b_k4,
     return s1t_note;
 }
 
+/* Calculate Modulated Frequency using 21-point Q12 ratio table (<0.57 cents error) */
+static uint32_t synth_calc_modulated_freq(uint32_t u4t_base_freq, int32_t s4t_total_cents)
+{
+    int32_t s4t_shifted = s4t_total_cents + PITCH_TABLE_OFFSET_CENTS;
+
+    if (s4t_shifted < 0)
+    {
+        s4t_shifted = 0;
+    }
+    else if (s4t_shifted > PITCH_TABLE_MAX_SHIFT)
+    {
+        s4t_shifted = PITCH_TABLE_MAX_SHIFT;
+    }
+    else
+    {
+        /* In valid bounds [0, 500] */
+    }
+
+    uint32_t u4t_idx = (uint32_t)s4t_shifted / PITCH_TABLE_STEP_CENTS;
+    uint32_t u4t_rem = (uint32_t)s4t_shifted % PITCH_TABLE_STEP_CENTS;
+    uint32_t u4t_ratio = (uint32_t)PITCH_RATIO_Q12[u4t_idx];
+
+    if (u4t_idx < PITCH_TABLE_LAST_IDX)
+    {
+        uint32_t u4t_diff = (uint32_t)PITCH_RATIO_Q12[u4t_idx + 1U] - u4t_ratio;
+        u4t_ratio += ((u4t_diff * u4t_rem) / PITCH_TABLE_STEP_CENTS);
+    }
+    else
+    {
+        /* At upper limit */
+    }
+
+    return (uint32_t)((u4t_base_freq * u4t_ratio) >> PITCH_Q12_SHIFT);
+}
+
 /* Sound Output Generator: Unified note calculation with pitch bend and vibrato */
-static void synth_play_note(int8_t s1t_note_index, uint8_t u1t_volume_pct, bool b_modulate, uint32_t u4t_now)
+static void synth_play_note(int8_t s1t_note_index, uint8_t u1t_volume_pct, bool b_modulate,
+                           int32_t s4t_norm_x, int32_t s4t_norm_y, uint32_t u4t_now)
 {
     uint32_t u4t_freq = NOTE_FREQ[s1t_note_index];
 
     if (b_modulate == true)
     {
-        int32_t s4t_norm_x = bsp_joystick_get_norm_x();
-        int32_t s4t_norm_y = bsp_joystick_get_norm_y();
         int32_t s4t_cents_bend = (s4t_norm_x * BEND_MAX_CENTS) / 1000;
         int32_t s4t_vib_depth = 0;
 
@@ -571,18 +613,7 @@ static void synth_play_note(int8_t s1t_note_index, uint8_t u1t_volume_pct, bool 
 
         if (s4t_total_cents != 0)
         {
-            int32_t s4t_c2_term = (BEND_POLY_COEFF_A * s4t_total_cents * s4t_total_cents) / BEND_POLY_DIVISOR;
-            int32_t s4t_scaled = BEND_POLY_SCALE_Q16 + (BEND_POLY_COEFF_B * s4t_total_cents) + s4t_c2_term;
-            int32_t s4t_calc_freq = (((int32_t)u4t_freq * s4t_scaled) + BEND_POLY_ROUND_Q16) / BEND_POLY_SCALE_Q16;
-
-            if (s4t_calc_freq < 1)
-            {
-                u4t_freq = 1U;
-            }
-            else
-            {
-                u4t_freq = (uint32_t)s4t_calc_freq;
-            }
+            u4t_freq = synth_calc_modulated_freq(u4t_freq, s4t_total_cents);
         }
         else
         {
@@ -595,7 +626,7 @@ static void synth_play_note(int8_t s1t_note_index, uint8_t u1t_volume_pct, bool 
     }
 
     uint16_t u2t_volume_raw = (uint16_t)(((uint32_t)u1t_volume_pct * VOLUME_RAW_MAX) / PERCENT_SCALE);
-    bsp_buzzer_play_chunk(u4t_freq, u2t_volume_raw);
+    bsp_buzzer_set_tone(u4t_freq, u2t_volume_raw);
 }
 
 /* State Machine Updates */
@@ -686,7 +717,7 @@ static void synth_update_playback(uint32_t u4t_now, uint8_t u1t_volume_pct)
     if (g_b_play_in_note_phase == true)
     {
         bsp_gpio_led_red_set(true);
-        synth_play_note(p_step->note_index, u1t_volume_pct, false, 0U);
+        synth_play_note(p_step->note_index, u1t_volume_pct, false, 0, 0, 0U);
 
         if (g_u2t_play_current_step != g_u2t_last_logged_play_step)
         {
@@ -724,7 +755,6 @@ static void synth_update_playback(uint32_t u4t_now, uint8_t u1t_volume_pct)
 
         bsp_buzzer_off();
         bsp_gpio_led_red_set(false);
-        bsp_delay_us(1000U);
 
         if (u4t_elapsed >= u4t_rest_target)
         {
@@ -758,7 +788,8 @@ static void synth_update_playback(uint32_t u4t_now, uint8_t u1t_volume_pct)
     }
 }
 
-static void synth_update_live_sound(int8_t s1t_active_note, uint8_t u1t_volume_pct, uint32_t u4t_now)
+static void synth_update_live_sound(int8_t s1t_active_note, uint8_t u1t_volume_pct,
+                                   int32_t s4t_norm_x, int32_t s4t_norm_y, uint32_t u4t_now)
 {
     if (s1t_active_note >= 0)
     {
@@ -774,7 +805,7 @@ static void synth_update_live_sound(int8_t s1t_active_note, uint8_t u1t_volume_p
         {
             /* Note continues */
         }
-        synth_play_note(s1t_active_note, u1t_volume_pct, true, u4t_now);
+        synth_play_note(s1t_active_note, u1t_volume_pct, true, s4t_norm_x, s4t_norm_y, u4t_now);
     }
     else
     {
@@ -792,7 +823,8 @@ static void synth_update_live_sound(int8_t s1t_active_note, uint8_t u1t_volume_p
 }
 
 /* OLED Virtual Piano UI Service */
-static void synth_update_display(uint32_t u4t_now, int8_t s1t_active_note, uint8_t u1t_volume_pct)
+static void synth_update_display(uint32_t u4t_now, int8_t s1t_active_note, uint8_t u1t_volume_pct,
+                                int32_t s4t_norm_x, int32_t s4t_norm_y)
 {
     static uint32_t u4t_last_render_ms = 0U;
 
@@ -800,8 +832,6 @@ static void synth_update_display(uint32_t u4t_now, int8_t s1t_active_note, uint8
     {
         u4t_last_render_ms = u4t_now;
 
-        int32_t s4t_norm_x = bsp_joystick_get_norm_x();
-        int32_t s4t_norm_y = bsp_joystick_get_norm_y();
         bool b_high_bank = (s4t_norm_y <= JOY_HIGH_BANK_THRESHOLD);
         int32_t s4t_cents = (s4t_norm_x * BEND_MAX_CENTS) / 1000;
         int8_t s1t_display_key = -1;
@@ -837,10 +867,24 @@ static void synth_update_display(uint32_t u4t_now, int8_t s1t_active_note, uint8
             s1t_display_key = s1t_active_note;
         }
 
+        const char *p_note_name = (const char *)0;
+        const char *p_note_freq = (const char *)0;
+
+        if ((s1t_display_key >= 0) && (s1t_display_key < (int8_t)SYNTH_NUM_NOTES))
+        {
+            p_note_name = NOTE_NAMES[s1t_display_key];
+            p_note_freq = NOTE_FREQS[s1t_display_key];
+        }
+        else
+        {
+            p_note_name = "-- SILENT --";
+            p_note_freq = "";
+        }
+
         bsp_oled_clear_buffer();
-        bsp_oled_render_header(p_mode_str, b_high_bank, u1t_volume_pct, s1t_display_key, s4t_cents);
+        bsp_oled_render_header(p_mode_str, b_high_bank, u1t_volume_pct, p_note_name, p_note_freq, s4t_cents);
         bsp_oled_render_pitch_gauge(s4t_norm_x);
-        bsp_oled_render_piano_keyboard(s1t_display_key);
+        bsp_oled_render_piano_keyboard(s1t_display_key, KEY_LABELS);
     }
     else
     {
@@ -912,11 +956,11 @@ void app_synth_init(void)
     bsp_uart_send_string("  Type '?' in Serial Monitor for Help | 115200 bps\r\n");
     bsp_uart_send_string("===================================================\r\n");
 
-    bsp_buzzer_play_chunk(NOTE_FREQ[SYNTH_NOTE_INDEX_DO], CHIME_NOTE_VOL_RAW);
+    bsp_buzzer_set_tone(NOTE_FREQ[SYNTH_NOTE_INDEX_DO], CHIME_NOTE_VOL_RAW);
     bsp_delay_ms(CHIME_DELAY_SHORT_MS);
-    bsp_buzzer_play_chunk(NOTE_FREQ[SYNTH_NOTE_INDEX_MI], CHIME_NOTE_VOL_RAW);
+    bsp_buzzer_set_tone(NOTE_FREQ[SYNTH_NOTE_INDEX_MI], CHIME_NOTE_VOL_RAW);
     bsp_delay_ms(CHIME_DELAY_SHORT_MS);
-    bsp_buzzer_play_chunk(NOTE_FREQ[SYNTH_NOTE_INDEX_SOL], CHIME_NOTE_VOL_FINAL);
+    bsp_buzzer_set_tone(NOTE_FREQ[SYNTH_NOTE_INDEX_SOL], CHIME_NOTE_VOL_FINAL);
     bsp_delay_ms(CHIME_DELAY_LONG_MS);
     bsp_buzzer_off();
 }
@@ -940,7 +984,6 @@ void app_synth_run(void)
         }
 
         /* Periodic Services */
-        bsp_adc_service(u4t_now);
         bsp_joystick_service(u4t_now);
         synth_handle_uart_rx(u4t_now);
 
@@ -959,18 +1002,17 @@ void app_synth_run(void)
             /* No switch event */
         }
 
-        /* Read 4 Piano Keys with Zero-Latency Debounce Filter */
-        bool b_k1 = bsp_gpio_read_key1();
-        bool b_k2 = bsp_gpio_read_key2();
-        bool b_k3 = bsp_gpio_read_key3();
-        bool b_k4 = bsp_gpio_read_key4();
-
-        synth_debounce_keys(u4t_now, &b_k1, &b_k2, &b_k3, &b_k4);
-
-        synth_check_combo(u4t_now, b_k1, b_k2, b_k3, b_k4);
-
-        s1t_active_note = synth_read_active_note(b_k1, b_k2, b_k3, b_k4, u4t_now);
+        /* Sample sensor snapshots once per superloop pass */
+        int32_t s4t_norm_x = bsp_joystick_get_norm_x();
+        int32_t s4t_norm_y = bsp_joystick_get_norm_y();
         u1t_volume_pct = bsp_adc_get_volume_percent();
+
+        /* Read 4 Piano Keys into bitmask with independent lockout debounce */
+        uint8_t u1t_keys = synth_debounce_keys(u4t_now);
+
+        synth_check_combo(u4t_now, u1t_keys);
+
+        s1t_active_note = synth_read_active_note(u1t_keys, s4t_norm_y, u4t_now);
 
         synth_update_recording(u4t_now, s1t_active_note);
 
@@ -980,11 +1022,9 @@ void app_synth_run(void)
         }
         else
         {
-            synth_update_live_sound(s1t_active_note, u1t_volume_pct, u4t_now);
+            synth_update_live_sound(s1t_active_note, u1t_volume_pct, s4t_norm_x, s4t_norm_y, u4t_now);
         }
 
-        synth_update_display(u4t_now, s1t_active_note, u1t_volume_pct);
-
-        bsp_delay_us(1000U);
+        synth_update_display(u4t_now, s1t_active_note, u1t_volume_pct, s4t_norm_x, s4t_norm_y);
     }
 }

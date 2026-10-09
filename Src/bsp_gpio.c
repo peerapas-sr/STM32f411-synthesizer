@@ -67,27 +67,51 @@ void bsp_gpio_init(void)
     NVIC_EnableIRQ(EXTI15_10_IRQn);
 }
 
-/* Key State Readers (Active-Low: Pressed = true) */
-bool bsp_gpio_read_key1(void)
+/* Read 4 Keys into unified 4-bit bitmask (Bit 0: Key 1, Bit 1: Key 2, Bit 2: Key 3, Bit 3: Key 4) */
+uint8_t bsp_gpio_read_keys(void)
 {
-    return ((GPIOA->IDR & (1UL << KEY1_PIN)) == 0U);
+    uint8_t u1t_mask = 0U;
+
+    if ((GPIOA->IDR & (1UL << KEY1_PIN)) == 0U)
+    {
+        u1t_mask |= 0x01U;
+    }
+    else
+    {
+        /* Key 1 released */
+    }
+
+    if ((GPIOB->IDR & (1UL << KEY2_PIN)) == 0U)
+    {
+        u1t_mask |= 0x02U;
+    }
+    else
+    {
+        /* Key 2 released */
+    }
+
+    if ((GPIOB->IDR & (1UL << KEY3_PIN)) == 0U)
+    {
+        u1t_mask |= 0x04U;
+    }
+    else
+    {
+        /* Key 3 released */
+    }
+
+    if ((GPIOB->IDR & (1UL << KEY4_PIN)) == 0U)
+    {
+        u1t_mask |= 0x08U;
+    }
+    else
+    {
+        /* Key 4 released */
+    }
+
+    return u1t_mask;
 }
 
-bool bsp_gpio_read_key2(void)
-{
-    return ((GPIOB->IDR & (1UL << KEY2_PIN)) == 0U);
-}
-
-bool bsp_gpio_read_key3(void)
-{
-    return ((GPIOB->IDR & (1UL << KEY3_PIN)) == 0U);
-}
-
-bool bsp_gpio_read_key4(void)
-{
-    return ((GPIOB->IDR & (1UL << KEY4_PIN)) == 0U);
-}
-
+/* HW-504 Joystick Switch Reader (Active-Low: Pressed = true) */
 bool bsp_gpio_read_joystick_switch(void)
 {
     return ((GPIOC->IDR & (1UL << JOY_SW_PIN)) == 0U);

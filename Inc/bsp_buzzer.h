@@ -12,7 +12,6 @@
 
 void bsp_buzzer_init(void);
 void bsp_buzzer_set_tone(uint32_t u4t_freq_hz, uint16_t u2t_vol_adc);
-void bsp_buzzer_play_chunk(uint32_t u4t_freq_hz, uint16_t u2t_vol_adc);
 void bsp_buzzer_off(void);
 
 #endif /* BSP_BUZZER_H */

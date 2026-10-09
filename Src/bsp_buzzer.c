@@ -76,12 +76,11 @@ void bsp_buzzer_set_tone(uint32_t u4t_freq_hz, uint16_t u2t_vol_adc)
             /* Period is valid */
         }
 
-        /* Cubic perceptual volume curve: (vol_adc / 4095)^3 to match human hearing */
+        /* Quadratic perceptual volume curve: (vol_adc / 4095)^2 */
         uint32_t u4t_v = (uint32_t)u2t_vol_adc;
-        uint32_t u4t_v_cube = (u4t_v * u4t_v) / ADC_MAX_VAL;
-        u4t_v_cube = (u4t_v_cube * u4t_v) / ADC_MAX_VAL;
+        uint32_t u4t_v_scaled = (u4t_v * u4t_v) / ADC_MAX_VAL;
 
-        uint32_t u4t_high = (u4t_v_cube * u4t_max_high) / ADC_MAX_VAL;
+        uint32_t u4t_high = (u4t_v_scaled * u4t_max_high) / ADC_MAX_VAL;
         if (u4t_high < BUZZER_MIN_PULSE_TICKS)
         {
             u4t_high = BUZZER_MIN_PULSE_TICKS;
@@ -109,9 +108,4 @@ void bsp_buzzer_set_tone(uint32_t u4t_freq_hz, uint16_t u2t_vol_adc)
             /* Timer is already running; shadow preload registers update seamlessly */
         }
     }
-}
-
-void bsp_buzzer_play_chunk(uint32_t u4t_freq_hz, uint16_t u2t_vol_adc)
-{
-    bsp_buzzer_set_tone(u4t_freq_hz, u2t_vol_adc);
 }

@@ -145,12 +145,6 @@ void bsp_adc_init(void)
     ADC1->CR2 |= ADC_CR2_ADON;
 }
 
-/* Service function maintained for interface compatibility (Zero CPU work) */
-void bsp_adc_service(uint32_t u4t_now)
-{
-    (void)u4t_now; /* DMA transfers autonomously in hardware without CPU polling */
-}
-
 /* Retrieve raw snapshot of Joystick X and Y (atomic single-cycle reads from DMA buffer) */
 bool bsp_adc_get_joystick_raw(uint16_t *p_x_raw, uint16_t *p_y_raw)
 {
@@ -174,16 +168,10 @@ bool bsp_adc_get_joystick_raw(uint16_t *p_x_raw, uint16_t *p_y_raw)
 uint8_t bsp_adc_get_volume_percent(void)
 {
     uint8_t u1t_vol_pct = 0U;
-    uint16_t u2t_pot_val = g_u2t_adc_dma_buffer[ADC_CH_POT_INDEX];
-    uint32_t u4t_val = (uint32_t)u2t_pot_val;
+    uint32_t u4t_val = (uint32_t)g_u2t_adc_dma_buffer[ADC_CH_POT_INDEX];
 
-    if (u4t_val <= ADC_VOL_MUTE_THRESHOLD)
+    if (u4t_val > ADC_VOL_MUTE_THRESHOLD)
     {
-        u1t_vol_pct = 0U; /* Mute when turned to the bottom */
-    }
-    else
-    {
-        /* Rescale smoothly from MUTE_THRESHOLD..ADC_MAX_VALUE to 1..100% */
         uint32_t u4t_span = (uint32_t)(ADC_MAX_VALUE - ADC_VOL_MUTE_THRESHOLD);
         uint32_t u4t_adj = u4t_val - (uint32_t)ADC_VOL_MUTE_THRESHOLD;
         uint32_t u4t_pct = (u4t_adj * PERCENT_MAX) / u4t_span;
@@ -192,15 +180,15 @@ uint8_t bsp_adc_get_volume_percent(void)
         {
             u4t_pct = PERCENT_MAX;
         }
-        else if (u4t_pct == 0U)
-        {
-            u4t_pct = 1U;
-        }
         else
         {
-            /* In range 1 to 100 */
+            /* In range 0 to 100 */
         }
         u1t_vol_pct = (uint8_t)u4t_pct;
+    }
+    else
+    {
+        u1t_vol_pct = 0U;
     }
 
     return u1t_vol_pct;

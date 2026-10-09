@@ -28,10 +28,7 @@
 /* Public API Functions */
 void bsp_gpio_init(void);
 
-bool bsp_gpio_read_key1(void);
-bool bsp_gpio_read_key2(void);
-bool bsp_gpio_read_key3(void);
-bool bsp_gpio_read_key4(void);
+uint8_t bsp_gpio_read_keys(void);
 bool bsp_gpio_read_joystick_switch(void);
 
 void bsp_gpio_led_red_set(bool b_state);

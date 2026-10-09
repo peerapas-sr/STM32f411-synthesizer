@@ -14,7 +14,6 @@
 #define TIM3_ARR_1MS            (999U)
 #define TIM3_NVIC_PRIORITY      (3U)
 #define DELAY_US_CALIB_COUNT    (1U)
-#define DELAY_MS_CALIB_COUNT    (2000U)
 
 /* Global millisecond tick counter updated by TIM3 Interrupt */
 static volatile uint32_t g_u4t_system_ms = 0U;
@@ -68,15 +67,11 @@ void bsp_delay_us(uint32_t u4t_us)
 
 void bsp_delay_ms(uint32_t u4t_ms)
 {
-    uint32_t u4t_ms_rem = u4t_ms;
+    uint32_t u4t_start_ms = bsp_timer_get_ms();
 
-    while (u4t_ms_rem > 0U)
+    while ((bsp_timer_get_ms() - u4t_start_ms) < u4t_ms)
     {
-        for (volatile uint32_t u4t_i = 0U; u4t_i < DELAY_MS_CALIB_COUNT; u4t_i++)
-        {
-            __NOP();
-        }
-        u4t_ms_rem--;
+        /* Wait for elapsed milliseconds using hardware TIM3 1ms tick */
     }
 }
 

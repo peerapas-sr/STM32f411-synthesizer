@@ -10,7 +10,6 @@
 #include "stm32f4xx.h"
 
 /* Named Constants (Rule 5 & Rule 10) */
-#define BUZZER_PIN_PB7          (7U)       /* PB7: TIM4_CH2 (AF2) */
 #define BUZZER_VOL_MIN_THRESH   (80U)
 #define SEC_TO_US_FACTOR        (1000000U)
 #define ADC_MAX_VAL             (4095U)
@@ -19,37 +18,33 @@
 #define TIM4_PRESCALER_1MHZ     (15U)      /* 16 MHz / (15 + 1) = 1 MHz (1 tick = 1 us) */
 #define BUZZER_MIN_PULSE_TICKS  (2U)
 #define BUZZER_HALF_PERIOD_DIV  (2U)       /* Max duty = 50 % */
-#define BUZZER_PIN_BIT          (1UL << BUZZER_PIN_PB7)
-#define BUZZER_2BIT_MASK        (3UL << (BUZZER_PIN_PB7 * 2U))
-#define BUZZER_AF_MODE          (2UL << (BUZZER_PIN_PB7 * 2U))  /* MODER = 10: alternate function */
-#define BUZZER_VERY_HIGH_SPEED  (3UL << (BUZZER_PIN_PB7 * 2U))  /* OSPEEDR = 11 */
-#define BUZZER_AF_MASK          (15UL << (BUZZER_PIN_PB7 * 4U))
-#define BUZZER_AF2_TIM4         (2UL << (BUZZER_PIN_PB7 * 4U))
-#define TIM_OC_MODE_PWM1        (6UL)      /* OCxM = 110: PWM mode 1 */
+#define GPIO_AF2_TIM4           (2UL)      /* AF2 = TIM4_CH2 on PB7 */
 
 void bsp_buzzer_init(void)
 {
-    /* 1. Enable GPIOB and TIM4 Peripheral Clocks */
+    /* --- Setup peripheral clock --- */
     RCC->AHB1ENR |= RCC_AHB1ENR_GPIOBEN;
     RCC->APB1ENR |= RCC_APB1ENR_TIM4EN;
 
-    /* 2. Configure PB7 as Alternate Function AF2 (TIM4_CH2, Push-Pull, High Speed) */
-    GPIOB->MODER = (GPIOB->MODER & ~BUZZER_2BIT_MASK) | BUZZER_AF_MODE;
-    GPIOB->OTYPER &= ~BUZZER_PIN_BIT;
-    GPIOB->OSPEEDR |= BUZZER_VERY_HIGH_SPEED;
-    GPIOB->PUPDR &= ~BUZZER_2BIT_MASK;
-    GPIOB->AFR[0] = (GPIOB->AFR[0] & ~BUZZER_AF_MASK) | BUZZER_AF2_TIM4;
+    /* --- Setup GPIO PB7: AF2 (TIM4_CH2), push-pull, very high speed, no pull --- */
+    GPIOB->MODER &= ~GPIO_MODER_MODER7;
+    GPIOB->MODER |= GPIO_MODER_MODER7_1;    /* 10 = alternate function */
+    GPIOB->OTYPER &= ~GPIO_OTYPER_OT7;
+    GPIOB->OSPEEDR |= GPIO_OSPEEDR_OSPEED7;    /* 11 = very high speed */
+    GPIOB->PUPDR &= ~GPIO_PUPDR_PUPD7;
+    GPIOB->AFR[0] &= ~GPIO_AFRL_AFSEL7;
+    GPIOB->AFR[0] |= (GPIO_AF2_TIM4 << GPIO_AFRL_AFSEL7_Pos);
 
-    /* 3. Configure TIM4 Timebase: 1 MHz Counter Rate (1 tick = 1 us) */
+    /* --- Setup TIM4 timebase: 1 MHz counter rate (1 tick = 1 us) --- */
     TIM4->PSC = TIM4_PRESCALER_1MHZ;
     TIM4->CR1 = TIM_CR1_ARPE;
 
-    /* 4. Configure Channel 2 for Hardware PWM Mode 1 with Preload Enabled */
+    /* --- Setup TIM4 CH2: PWM mode 1 with preload --- */
     TIM4->CCMR1 &= ~TIM_CCMR1_OC2M;
-    TIM4->CCMR1 |=  ((TIM_OC_MODE_PWM1 << TIM_CCMR1_OC2M_Pos) | TIM_CCMR1_OC2PE);
-    TIM4->CCER  |=  TIM_CCER_CC2E;
+    TIM4->CCMR1 |= (TIM_CCMR1_OC2M_2 | TIM_CCMR1_OC2M_1 | TIM_CCMR1_OC2PE);    /* OC2M = 110: PWM mode 1 */
+    TIM4->CCER |= TIM_CCER_CC2E;
 
-    /* 5. Initialize Output in Muted State */
+    /* --- Start muted --- */
     TIM4->CCR2 = 0U;
     TIM4->CR1 &= ~TIM_CR1_CEN;
 }

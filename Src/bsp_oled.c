@@ -16,17 +16,7 @@
 #define I2C_CTRL_BYTE_CMD           (0x00U)
 #define I2C_CTRL_BYTE_DATA          (0x40U)
 #define I2C_ERROR_FLAGS             (I2C_SR1_BERR | I2C_SR1_ARLO | I2C_SR1_AF | I2C_SR1_OVR)
-#define I2C_SCL_BIT                 (1UL << 8U)
-#define I2C_SDA_BIT                 (1UL << 9U)
-#define I2C_PINS_2BIT_MASK          ((3UL << 16U) | (3UL << 18U))
-#define I2C_PINS_OUTPUT_MODE        ((1UL << 16U) | (1UL << 18U))
-#define I2C_PINS_AF_MODE            ((2UL << 16U) | (2UL << 18U))
-#define I2C_PINS_PULL_UP            ((1UL << 16U) | (1UL << 18U))
-#define I2C_PINS_VERY_HIGH          ((3UL << 16U) | (3UL << 18U))    /* OSPEEDR = 11: very high speed */
-#define BSRR_RESET_SHIFT            (16U)
-#define DMA_CHANNEL_1               (1UL)      /* DMA1 Stream 6 channel 1 = I2C1_TX */
-#define I2C_PINS_AF4                ((4UL << 0U) | (4UL << 4U))
-#define I2C_PINS_AF_MASK            ((15UL << 0U) | (15UL << 4U))
+#define GPIO_AF4_I2C1               (4UL)      /* AF4 = I2C1 on PB8 / PB9 */
 #define I2C_CR2_FREQ_16MHZ          (16U)
 #define I2C_CCR_FAST_400KHZ         (14U)
 #define I2C_TRISE_FAST              (5U)
@@ -153,23 +143,25 @@ static void oled_i2c_bus_recovery(void)
     DMA1->HIFCR = DMA1_S6_ALL_FLAGS;
     I2C1->CR1 |= I2C_CR1_SWRST;
 
-    GPIOB->MODER = (GPIOB->MODER & ~I2C_PINS_2BIT_MASK) | I2C_PINS_OUTPUT_MODE;
-    GPIOB->BSRR = (I2C_SCL_BIT | I2C_SDA_BIT);
+    GPIOB->MODER &= ~(GPIO_MODER_MODER8 | GPIO_MODER_MODER9);
+    GPIOB->MODER |= (GPIO_MODER_MODER8_0 | GPIO_MODER_MODER9_0);    /* 01 = output (bit-bang) */
+    GPIOB->BSRR = (GPIO_BSRR_BS8 | GPIO_BSRR_BS9);
     bsp_delay_us(I2C_BIT_DELAY_US);
-    for (uint8_t u1t_i = 0U; (u1t_i < I2C_RECOVERY_PULSES) && ((GPIOB->IDR & I2C_SDA_BIT) == 0U); u1t_i++)
+    for (uint8_t u1t_i = 0U; (u1t_i < I2C_RECOVERY_PULSES) && ((GPIOB->IDR & GPIO_IDR_ID9) == 0U); u1t_i++)
     {
-        GPIOB->BSRR = (I2C_SCL_BIT << BSRR_RESET_SHIFT);
+        GPIOB->BSRR = GPIO_BSRR_BR8;    /* SCL low */
         bsp_delay_us(I2C_BIT_DELAY_US);
-        GPIOB->BSRR = I2C_SCL_BIT;
+        GPIOB->BSRR = GPIO_BSRR_BS8;    /* SCL high */
         bsp_delay_us(I2C_BIT_DELAY_US);
     }
-    GPIOB->BSRR = (I2C_SDA_BIT << BSRR_RESET_SHIFT);    /* Manual STOP: SDA low -> SCL high -> SDA high */
+    GPIOB->BSRR = GPIO_BSRR_BR9;    /* Manual STOP: SDA low -> SCL high -> SDA high */
     bsp_delay_us(I2C_BIT_DELAY_US);
-    GPIOB->BSRR = I2C_SCL_BIT;
+    GPIOB->BSRR = GPIO_BSRR_BS8;
     bsp_delay_us(I2C_BIT_DELAY_US);
-    GPIOB->BSRR = I2C_SDA_BIT;
+    GPIOB->BSRR = GPIO_BSRR_BS9;
     bsp_delay_us(I2C_BIT_DELAY_US);
-    GPIOB->MODER = (GPIOB->MODER & ~I2C_PINS_2BIT_MASK) | I2C_PINS_AF_MODE;
+    GPIOB->MODER &= ~(GPIO_MODER_MODER8 | GPIO_MODER_MODER9);
+    GPIOB->MODER |= (GPIO_MODER_MODER8_1 | GPIO_MODER_MODER9_1);    /* 10 = alternate function */
 
     I2C1->CR1 &= ~I2C_CR1_SWRST;
     I2C1->CR2 = I2C_CR2_FREQ_16MHZ;
@@ -557,10 +549,12 @@ void bsp_oled_init(void)
 
     RCC->AHB1ENR |= (RCC_AHB1ENR_GPIOBEN | RCC_AHB1ENR_DMA1EN);
     RCC->APB1ENR |= RCC_APB1ENR_I2C1EN;
-    GPIOB->OTYPER |= (I2C_SCL_BIT | I2C_SDA_BIT);
-    GPIOB->OSPEEDR |= I2C_PINS_VERY_HIGH;
-    GPIOB->PUPDR = (GPIOB->PUPDR & ~I2C_PINS_2BIT_MASK) | I2C_PINS_PULL_UP;
-    GPIOB->AFR[1] = (GPIOB->AFR[1] & ~I2C_PINS_AF_MASK) | I2C_PINS_AF4;
+    GPIOB->OTYPER |= (GPIO_OTYPER_OT8 | GPIO_OTYPER_OT9);    /* open-drain */
+    GPIOB->OSPEEDR |= (GPIO_OSPEEDR_OSPEED8 | GPIO_OSPEEDR_OSPEED9);    /* 11 = very high speed */
+    GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPD8 | GPIO_PUPDR_PUPD9);
+    GPIOB->PUPDR |= (GPIO_PUPDR_PUPD8_0 | GPIO_PUPDR_PUPD9_0);    /* 01 = pull-up */
+    GPIOB->AFR[1] &= ~(GPIO_AFRH_AFSEL8 | GPIO_AFRH_AFSEL9);
+    GPIOB->AFR[1] |= ((GPIO_AF4_I2C1 << GPIO_AFRH_AFSEL8_Pos) | (GPIO_AF4_I2C1 << GPIO_AFRH_AFSEL9_Pos));
     oled_i2c_bus_recovery();    /* Also switches PB8/PB9 to AF mode and configures I2C1 */
 
     bsp_delay_ms(OLED_POWER_UP_MS);
@@ -584,7 +578,7 @@ void bsp_oled_init(void)
     (void)oled_wait_clear(&DMA1_Stream6->CR, DMA_SxCR_EN);
     DMA1->HIFCR = DMA1_S6_ALL_FLAGS;
     DMA1_Stream6->PAR = (uint32_t)(&(I2C1->DR));
-    DMA1_Stream6->CR = ((DMA_CHANNEL_1 << DMA_SxCR_CHSEL_Pos) | DMA_SxCR_PL_1 | DMA_SxCR_MINC | DMA_SxCR_DIR_0 | DMA_SxCR_TCIE);
+    DMA1_Stream6->CR = (DMA_SxCR_CHSEL_0 | DMA_SxCR_PL_1 | DMA_SxCR_MINC | DMA_SxCR_DIR_0 | DMA_SxCR_TCIE);
     DMA1_Stream6->FCR = 0U;
     NVIC_SetPriority(DMA1_Stream6_IRQn, I2C1_DMA_NVIC_PRIORITY);
     NVIC_EnableIRQ(DMA1_Stream6_IRQn);

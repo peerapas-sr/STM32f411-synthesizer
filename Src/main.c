@@ -28,8 +28,8 @@
 #include "app_synth.h"
 
 /* Named Constants (Rule 5 & Rule 10) */
-#define SCB_CPACR_CP10_FULL_ACCESS  (3UL << 20U)
-#define SCB_CPACR_CP11_FULL_ACCESS  (3UL << 22U)
+#define SCB_CPACR_CP10_FULL_ACCESS  (3UL << 20U)   /* CPACR bits 21:20 = 11: CP10 full access (no CMSIS name) */
+#define SCB_CPACR_CP11_FULL_ACCESS  (3UL << 22U)   /* CPACR bits 23:22 = 11: CP11 full access (no CMSIS name) */
 #define HSI_CLOCK_HZ                (16000000U)    /* Default internal 16 MHz oscillator */
 
 /* System Clock definition required by CMSIS */

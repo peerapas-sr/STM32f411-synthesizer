@@ -11,97 +11,134 @@
 
 /* Named Constants (Rule 5 & Rule 10) */
 #define EXTI2_NVIC_PRIORITY     (2U)
-#define EXTI_LINE_2_MASK        (1UL << JOY_SW_PIN)
-#define EXTICR1_LINE2_MASK      (0x0FUL << 8U)     /* EXTICR[0] bits 11:8 select the port of line 2 */
-#define EXTICR1_LINE2_PORTC     (0x02UL << 8U)     /* 0x2 = Port C */
-#define PORTA_LEDS_BITS         ((1UL << LED_BLUE_PIN) | (1UL << LED_RED_PIN) | (1UL << LED_YELLOW_PIN))
-#define PORTA_LEDS_MODE_MASK    ((3UL << (LED_BLUE_PIN * 2U)) | (3UL << (LED_RED_PIN * 2U)) | (3UL << (LED_YELLOW_PIN * 2U)))
-#define PORTA_LEDS_OUTPUT_MODE  ((1UL << (LED_BLUE_PIN * 2U)) | (1UL << (LED_RED_PIN * 2U)) | (1UL << (LED_YELLOW_PIN * 2U)))
-#define PORTB_LED_BIT           (1UL << LED_GREEN_PIN)
-#define PORTB_LED_MODE_MASK     (3UL << (LED_GREEN_PIN * 2U))
-#define PORTB_LED_OUTPUT_MODE   (1UL << (LED_GREEN_PIN * 2U))
-#define BSRR_RESET_SHIFT        (16U)
-#define KEYMASK_POS_KEY2        (1U)       /* Bit positions in bsp_gpio_read_keys() result */
-#define KEYMASK_POS_KEY3        (2U)
-#define KEYMASK_POS_KEY4        (3U)
-#define KEY1_MODE_MASK          (3UL << (KEY1_PIN * 2U))
-#define KEY1_PULL_UP            (1UL << (KEY1_PIN * 2U))
-#define PORTB_KEYS_MODE_MASK    ((3UL << (KEY2_PIN * 2U)) | (3UL << (KEY3_PIN * 2U)) | (3UL << (KEY4_PIN * 2U)))
-#define PORTB_KEYS_PULL_UP      ((1UL << (KEY2_PIN * 2U)) | (1UL << (KEY3_PIN * 2U)) | (1UL << (KEY4_PIN * 2U)))
-#define JOY_SW_MODE_MASK        (3UL << (JOY_SW_PIN * 2U))
-#define JOY_SW_PULL_UP          (1UL << (JOY_SW_PIN * 2U))
 
 static volatile bool g_b_joy_sw_exti_flag = false;
 
 void bsp_gpio_init(void)
 {
+    /* --- Setup peripheral clock --- */
     RCC->AHB1ENR |= (RCC_AHB1ENR_GPIOAEN | RCC_AHB1ENR_GPIOBEN | RCC_AHB1ENR_GPIOCEN);
     RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN;
 
-    /* 4 LEDs (active high): PA5 blue, PA6 red, PA7 yellow, PB6 green - push-pull outputs, start OFF */
-    GPIOA->BSRR = (PORTA_LEDS_BITS << BSRR_RESET_SHIFT);
-    GPIOB->BSRR = (PORTB_LED_BIT << BSRR_RESET_SHIFT);
-    GPIOA->MODER = (GPIOA->MODER & ~PORTA_LEDS_MODE_MASK) | PORTA_LEDS_OUTPUT_MODE;
-    GPIOB->MODER = (GPIOB->MODER & ~PORTB_LED_MODE_MASK) | PORTB_LED_OUTPUT_MODE;
-    GPIOA->OTYPER &= ~PORTA_LEDS_BITS;
-    GPIOB->OTYPER &= ~PORTB_LED_BIT;
-    GPIOA->PUPDR &= ~PORTA_LEDS_MODE_MASK;
-    GPIOB->PUPDR &= ~PORTB_LED_MODE_MASK;
+    /* --- Setup GPIO PA5 (blue), PA6 (red), PA7 (yellow) LED: output push-pull, no pull, start OFF --- */
+    GPIOA->BSRR = (GPIO_BSRR_BR5 | GPIO_BSRR_BR6 | GPIO_BSRR_BR7);
+    GPIOA->MODER &= ~(GPIO_MODER_MODER5 | GPIO_MODER_MODER6 | GPIO_MODER_MODER7);
+    GPIOA->MODER |= (GPIO_MODER_MODER5_0 | GPIO_MODER_MODER6_0 | GPIO_MODER_MODER7_0);    /* 01 = output */
+    GPIOA->OTYPER &= ~(GPIO_OTYPER_OT5 | GPIO_OTYPER_OT6 | GPIO_OTYPER_OT7);
+    GPIOA->PUPDR &= ~(GPIO_PUPDR_PUPD5 | GPIO_PUPDR_PUPD6 | GPIO_PUPDR_PUPD7);
 
-    /* Inputs with pull-up: PA10 (Key 1), PB3/PB5/PB4 (Keys 2-4), PC2 (Joystick SW) */
-    GPIOA->MODER &= ~KEY1_MODE_MASK;
-    GPIOA->PUPDR = (GPIOA->PUPDR & ~KEY1_MODE_MASK) | KEY1_PULL_UP;
-    GPIOB->MODER &= ~PORTB_KEYS_MODE_MASK;
-    GPIOB->PUPDR = (GPIOB->PUPDR & ~PORTB_KEYS_MODE_MASK) | PORTB_KEYS_PULL_UP;
-    GPIOC->MODER &= ~JOY_SW_MODE_MASK;
-    GPIOC->PUPDR = (GPIOC->PUPDR & ~JOY_SW_MODE_MASK) | JOY_SW_PULL_UP;
+    /* --- Setup GPIO PB6 (green) LED: output push-pull, no pull, start OFF --- */
+    GPIOB->BSRR = GPIO_BSRR_BR6;
+    GPIOB->MODER &= ~GPIO_MODER_MODER6;
+    GPIOB->MODER |= GPIO_MODER_MODER6_0;    /* 01 = output */
+    GPIOB->OTYPER &= ~GPIO_OTYPER_OT6;
+    GPIOB->PUPDR &= ~GPIO_PUPDR_PUPD6;
 
-    /* EXTI Line 2 on PC2 (Joystick SW): falling edge (press, active low) */
-    SYSCFG->EXTICR[0] = (SYSCFG->EXTICR[0] & ~EXTICR1_LINE2_MASK) | EXTICR1_LINE2_PORTC;
-    EXTI->IMR  |= EXTI_LINE_2_MASK;
-    EXTI->FTSR |= EXTI_LINE_2_MASK;
-    EXTI->RTSR &= ~EXTI_LINE_2_MASK;
+    /* --- Setup GPIO PA10 (Key 1): input, pull-up --- */
+    GPIOA->MODER &= ~GPIO_MODER_MODER10;    /* 00 = input */
+    GPIOA->PUPDR &= ~GPIO_PUPDR_PUPD10;
+    GPIOA->PUPDR |= GPIO_PUPDR_PUPD10_0;    /* 01 = pull-up */
+
+    /* --- Setup GPIO PB3, PB5, PB4 (Keys 2-4): input, pull-up --- */
+    GPIOB->MODER &= ~(GPIO_MODER_MODER3 | GPIO_MODER_MODER4 | GPIO_MODER_MODER5);
+    GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPD3 | GPIO_PUPDR_PUPD4 | GPIO_PUPDR_PUPD5);
+    GPIOB->PUPDR |= (GPIO_PUPDR_PUPD3_0 | GPIO_PUPDR_PUPD4_0 | GPIO_PUPDR_PUPD5_0);
+
+    /* --- Setup GPIO PC2 (Joystick SW): input, pull-up --- */
+    GPIOC->MODER &= ~GPIO_MODER_MODER2;
+    GPIOC->PUPDR &= ~GPIO_PUPDR_PUPD2;
+    GPIOC->PUPDR |= GPIO_PUPDR_PUPD2_0;
+
+    /* --- Setup EXTI Line 2 on PC2: falling edge (press, active low) --- */
+    SYSCFG->EXTICR[0] &= ~SYSCFG_EXTICR1_EXTI2;
+    SYSCFG->EXTICR[0] |= SYSCFG_EXTICR1_EXTI2_PC;
+    EXTI->IMR |= EXTI_IMR_MR2;
+    EXTI->FTSR |= EXTI_FTSR_TR2;
+    EXTI->RTSR &= ~EXTI_RTSR_TR2;
     NVIC_SetPriority(EXTI2_IRQn, EXTI2_NVIC_PRIORITY);
     NVIC_EnableIRQ(EXTI2_IRQn);
 }
 
-/* Raw key bitmask, pressed = 1 (Bit 0: Key 1, Bit 1: Key 2, Bit 2: Key 3, Bit 3: Key 4) */
+/* Key bitmask, pressed = 1 (KEY_MASK_1..4). Keys are active low: pin reads 0 when pressed. */
 uint8_t bsp_gpio_read_keys(void)
 {
-    uint32_t u4t_a = ~GPIOA->IDR;    /* Active low: invert so pressed = 1 */
-    uint32_t u4t_b = ~GPIOB->IDR;
+    uint8_t u1t_keys = 0U;
 
-    return (uint8_t)(((u4t_a >> KEY1_PIN) & 1U) |
-                     (((u4t_b >> KEY2_PIN) & 1U) << KEYMASK_POS_KEY2) |
-                     (((u4t_b >> KEY3_PIN) & 1U) << KEYMASK_POS_KEY3) |
-                     (((u4t_b >> KEY4_PIN) & 1U) << KEYMASK_POS_KEY4));
+    if ((GPIOA->IDR & GPIO_IDR_ID10) == 0U)
+    {
+        u1t_keys |= KEY_MASK_1;
+    }
+    else
+    {
+        /* No action required */
+    }
+    if ((GPIOB->IDR & GPIO_IDR_ID3) == 0U)
+    {
+        u1t_keys |= KEY_MASK_2;
+    }
+    else
+    {
+        /* No action required */
+    }
+    if ((GPIOB->IDR & GPIO_IDR_ID5) == 0U)
+    {
+        u1t_keys |= KEY_MASK_3;
+    }
+    else
+    {
+        /* No action required */
+    }
+    if ((GPIOB->IDR & GPIO_IDR_ID4) == 0U)
+    {
+        u1t_keys |= KEY_MASK_4;
+    }
+    else
+    {
+        /* No action required */
+    }
+    return u1t_keys;
 }
 
 bool bsp_gpio_read_joystick_switch(void)
 {
-    return ((GPIOC->IDR & (1UL << JOY_SW_PIN)) == 0U);
+    return ((GPIOC->IDR & GPIO_IDR_ID2) == 0U);
 }
 
-/* Turn one LED on or off through its port's BSRR (low half = set pin, high half = reset pin) */
-static void gpio_led_write(GPIO_TypeDef *p_port, uint32_t u4t_pin, bool b_on)
+/* Set all 4 LEDs from a mask (LED_MASK_*): BSx turns the pin on, BRx turns it off */
+void bsp_gpio_leds_set(uint8_t u1t_mask)
 {
-    if (b_on == true)
+    if ((u1t_mask & LED_MASK_BLUE) != 0U)
     {
-        p_port->BSRR = (1UL << u4t_pin);
+        GPIOA->BSRR = GPIO_BSRR_BS5;
     }
     else
     {
-        p_port->BSRR = (1UL << (u4t_pin + BSRR_RESET_SHIFT));
+        GPIOA->BSRR = GPIO_BSRR_BR5;
     }
-}
-
-/* Set all 4 LEDs from a mask (LED_MASK_*): a set bit turns its LED on, a cleared bit turns it off */
-void bsp_gpio_leds_set(uint8_t u1t_mask)
-{
-    gpio_led_write(GPIOA, LED_BLUE_PIN, ((u1t_mask & LED_MASK_BLUE) != 0U));
-    gpio_led_write(GPIOA, LED_RED_PIN, ((u1t_mask & LED_MASK_RED) != 0U));
-    gpio_led_write(GPIOA, LED_YELLOW_PIN, ((u1t_mask & LED_MASK_YELLOW) != 0U));
-    gpio_led_write(GPIOB, LED_GREEN_PIN, ((u1t_mask & LED_MASK_GREEN) != 0U));
+    if ((u1t_mask & LED_MASK_RED) != 0U)
+    {
+        GPIOA->BSRR = GPIO_BSRR_BS6;
+    }
+    else
+    {
+        GPIOA->BSRR = GPIO_BSRR_BR6;
+    }
+    if ((u1t_mask & LED_MASK_YELLOW) != 0U)
+    {
+        GPIOA->BSRR = GPIO_BSRR_BS7;
+    }
+    else
+    {
+        GPIOA->BSRR = GPIO_BSRR_BR7;
+    }
+    if ((u1t_mask & LED_MASK_GREEN) != 0U)
+    {
+        GPIOB->BSRR = GPIO_BSRR_BS6;
+    }
+    else
+    {
+        GPIOB->BSRR = GPIO_BSRR_BR6;
+    }
 }
 
 bool bsp_gpio_get_exti_flag(void)
@@ -117,9 +154,9 @@ void bsp_gpio_clear_exti_flag(void)
 /* EXTI Line 2 ISR: Joystick SW (PC2) pressed */
 void EXTI2_IRQHandler(void)
 {
-    if ((EXTI->PR & EXTI_LINE_2_MASK) != 0U)
+    if ((EXTI->PR & EXTI_PR_PR2) != 0U)
     {
-        EXTI->PR = EXTI_LINE_2_MASK;    /* Write 1 to clear pending */
+        EXTI->PR = EXTI_PR_PR2;    /* Write 1 to clear pending */
         g_b_joy_sw_exti_flag = true;
     }
     else

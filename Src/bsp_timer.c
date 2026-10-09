@@ -14,7 +14,6 @@
 #define TIM3_ARR_1MS            (999U)
 #define TIM3_NVIC_PRIORITY      (3U)
 #define DELAY_US_CALIB_COUNT    (1U)
-#define TIM_MMS_UPDATE_TRGO     (2UL)      /* MMS = 010: update event drives TRGO */
 
 /* Global millisecond tick counter updated by TIM3 Interrupt */
 static volatile uint32_t g_u4t_system_ms = 0U;
@@ -33,7 +32,7 @@ void bsp_timer_init(void)
 
     /* 3. Configure Master Output Trigger (TRGO on Update Event for ADC Sampling) */
     TIM3->CR2 &= ~TIM_CR2_MMS;
-    TIM3->CR2 |= (TIM_MMS_UPDATE_TRGO << TIM_CR2_MMS_Pos);
+    TIM3->CR2 |= TIM_CR2_MMS_1;    /* MMS = 010: update event drives TRGO */
 
     /* 4. Enable Update Interrupt */
     TIM3->DIER |= TIM_DIER_UIE;

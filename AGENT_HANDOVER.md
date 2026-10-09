@@ -157,7 +157,7 @@ Headers (Inc/*.h)	210	110	-100	-47.6%	มาโครที่ไม่ได้
 ---
 
 ## 5. Pass 2 Result (Claude Code)
-- Total: **3,284 -> 2,331 lines (-29%)** after the Toyota rule fixes. See `CLAUDE.md` "Current Status" for the per-file table.
+- Total: **3,284 -> 2,351 lines (-28%)** after the Toyota rule fixes and the switch to CMSIS register names (key read is plain if/else again for readability). See `CLAUDE.md` "Current Status" for the per-file table.
 - Toyota rule fixes: `else` added after all 55 single `if`s (Rule 19), magic numbers replaced by `#define`s (Rule 5), unreachable loop in `main` and dead branch in `bsp_buzzer_set_tone` removed (Rule 7), and 4 tricks rewritten plainly (triangle LFO, LED mask shifts, `oled_wait` bool comparison, XOR debounce).
 - Build 0 errors / 0 compiler warnings; `verify_misra.py` 0 violations; UART (RXNE/TXE ISR) and ADC (TIM3 TRGO + DMA2) still zero polling.
 - Features kept: 8 notes + bank switch, pitch bend, vibrato, 150 ms sustain, record / loop playback, K1+K4 / K2+K3 combos, UART commands and telemetry, OLED Virtual Piano with page-byte stride.

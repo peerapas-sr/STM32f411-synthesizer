@@ -18,12 +18,7 @@
 #define UART_DEC_MAX_DIGITS     (10U)
 #define UART_DECIMAL_BASE       (10U)
 #define UART_DR_DATA_MASK       (0xFFU)    /* 8 data bits */
-#define UART_PINS_2BIT_MASK     ((3UL << 4U) | (3UL << 6U))      /* PA2, PA3 2-bit config fields */
-#define UART_PINS_VERY_HIGH     ((3UL << 4U) | (3UL << 6U))      /* OSPEEDR = 11: very high speed */
-#define UART_PINS_AF_MODE       ((2UL << 4U) | (2UL << 6U))
-#define UART_PINS_PULL_UP       ((1UL << 4U) | (1UL << 6U))
-#define UART_PINS_AF_MASK       ((0xFUL << 8U) | (0xFUL << 12U))
-#define UART_PINS_AF7           ((7UL << 8U) | (7UL << 12U))
+#define GPIO_AF7_USART2         (7UL)      /* AF7 = USART2 on PA2 / PA3 */
 
 static volatile char     g_c_rx_buffer[UART_RX_BUFFER_SIZE];
 static volatile uint8_t  g_u1t_rx_head = 0U;
@@ -34,16 +29,20 @@ static volatile uint16_t g_u2t_tx_tail = 0U;
 
 void bsp_uart_init(void)
 {
+    /* --- Setup peripheral clock --- */
     RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
     RCC->APB1ENR |= RCC_APB1ENR_USART2EN;
 
-    /* PA2 (TX) / PA3 (RX): AF7, high speed, pull-up */
-    GPIOA->MODER = (GPIOA->MODER & ~UART_PINS_2BIT_MASK) | UART_PINS_AF_MODE;
-    GPIOA->AFR[0] = (GPIOA->AFR[0] & ~UART_PINS_AF_MASK) | UART_PINS_AF7;
-    GPIOA->OSPEEDR |= UART_PINS_VERY_HIGH;
-    GPIOA->PUPDR = (GPIOA->PUPDR & ~UART_PINS_2BIT_MASK) | UART_PINS_PULL_UP;
+    /* --- Setup GPIO PA2 (TX), PA3 (RX): AF7, very high speed, pull-up --- */
+    GPIOA->MODER &= ~(GPIO_MODER_MODER2 | GPIO_MODER_MODER3);
+    GPIOA->MODER |= (GPIO_MODER_MODER2_1 | GPIO_MODER_MODER3_1);    /* 10 = alternate function */
+    GPIOA->AFR[0] &= ~(GPIO_AFRL_AFSEL2 | GPIO_AFRL_AFSEL3);
+    GPIOA->AFR[0] |= ((GPIO_AF7_USART2 << GPIO_AFRL_AFSEL2_Pos) | (GPIO_AF7_USART2 << GPIO_AFRL_AFSEL3_Pos));
+    GPIOA->OSPEEDR |= (GPIO_OSPEEDR_OSPEED2 | GPIO_OSPEEDR_OSPEED3);    /* 11 = very high speed */
+    GPIOA->PUPDR &= ~(GPIO_PUPDR_PUPD2 | GPIO_PUPDR_PUPD3);
+    GPIOA->PUPDR |= (GPIO_PUPDR_PUPD2_0 | GPIO_PUPDR_PUPD3_0);    /* 01 = pull-up */
 
-    /* 115200 8N1, TX + RX enabled, RXNE interrupt (TXE interrupt enabled on demand) */
+    /* --- Setup USART2: 115200 8N1, TX + RX enabled, RXNE interrupt (TXE interrupt enabled on demand) --- */
     USART2->BRR = USART2_BRR_115200;
     USART2->CR1 = (USART_CR1_TE | USART_CR1_RE | USART_CR1_RXNEIE | USART_CR1_UE);
     NVIC_SetPriority(USART2_IRQn, USART2_NVIC_PRIORITY);

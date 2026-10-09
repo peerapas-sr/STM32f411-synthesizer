@@ -1,7 +1,7 @@
 /*******************************************************************************
  * File Name   : bsp_joystick.c
  * Description : HW-504 Joystick - VRx (PC0) / VRy (PC1) normalized to -1000..+1000,
- *               SW (PC2) debounced into Short / Long press events
+ *               SW (PC2): EXTI2 edge -> 30 ms debounce -> Short / Long press events
  * Target MCU  : STM32F411RET6
  * Standard    : Toyota Embedded MISRA-C Compliant (22 Rules)
  ******************************************************************************/
@@ -25,8 +25,9 @@ static uint32_t         g_u4t_ema_x = (uint32_t)JOY_CENTER_VAL;
 static uint32_t         g_u4t_ema_y = (uint32_t)JOY_CENTER_VAL;
 
 /* Switch starts "pressed + long already fired": no event until a full release/press cycle,
- * so a switch held (or stuck) at boot can never trigger a command */
-static bool             g_b_sw_raw_prev = true;
+ * so a switch held (or stuck) at boot can never trigger a command.
+ * The edge flag starts set so the real level is read once, 30 ms after boot. */
+static bool             g_b_sw_edge_pending = true;
 static bool             g_b_sw_pressed = true;
 static bool             g_b_sw_long_fired = true;
 static uint32_t         g_u4t_sw_edge_ms = 0U;
@@ -56,38 +57,53 @@ static int32_t joystick_calc_norm(uint32_t u4t_ema)
 
 void bsp_joystick_service(uint32_t u4t_now)
 {
-    bool b_raw = bsp_gpio_read_joystick_switch();
-
     /* Axes: EMA filter (3/4 old + 1/4 new) on DMA-fed ADC samples */
     g_u4t_ema_x = ((g_u4t_ema_x * JOY_EMA_WEIGHT_PREV) + bsp_adc_get_raw(ADC_IDX_JOY_X)) / JOY_EMA_WEIGHT_DIV;
     g_u4t_ema_y = ((g_u4t_ema_y * JOY_EMA_WEIGHT_PREV) + bsp_adc_get_raw(ADC_IDX_JOY_Y)) / JOY_EMA_WEIGHT_DIV;
 
-    /* Switch: accept a new level once it is stable for 30 ms */
-    if (b_raw != g_b_sw_raw_prev)
+    /* Switch: EXTI2 reports every edge on PC2; each edge (bounce included) restarts the 30 ms window */
+    if (bsp_gpio_get_exti_flag() == true)
     {
-        g_b_sw_raw_prev = b_raw;
+        bsp_gpio_clear_exti_flag();
+        g_b_sw_edge_pending = true;
         g_u4t_sw_edge_ms = u4t_now;
     }
-    else if (((u4t_now - g_u4t_sw_edge_ms) >= SW_DEBOUNCE_MS) && (b_raw != g_b_sw_pressed))
+    else
     {
-        g_b_sw_pressed = b_raw;
-        if (b_raw == true)
+        /* No edge since the last pass */
+    }
+
+    /* No edge for 30 ms: the contact has settled, read the final level once */
+    if ((g_b_sw_edge_pending == true) && ((u4t_now - g_u4t_sw_edge_ms) >= SW_DEBOUNCE_MS))
+    {
+        bool b_level = bsp_gpio_read_joystick_switch();
+
+        g_b_sw_edge_pending = false;
+        if (b_level != g_b_sw_pressed)
         {
-            g_u4t_sw_press_ms = u4t_now;
-            g_b_sw_long_fired = false;
-        }
-        else if (g_b_sw_long_fired == false)
-        {
-            g_sw_event = JOY_SW_EVT_SHORT_PRESS;
+            g_b_sw_pressed = b_level;
+            if (b_level == true)
+            {
+                g_u4t_sw_press_ms = u4t_now;
+                g_b_sw_long_fired = false;
+            }
+            else if (g_b_sw_long_fired == false)
+            {
+                g_sw_event = JOY_SW_EVT_SHORT_PRESS;
+            }
+            else
+            {
+                /* Release after long press: already reported */
+            }
         }
         else
         {
-            /* Release after long press: already reported */
+            /* Bounce ended at the same level: no change */
         }
     }
     else
     {
-        /* Level unchanged or still bouncing */
+        /* No pending edge, or still inside the debounce window */
     }
 
     if ((g_b_sw_pressed == true) && (g_b_sw_long_fired == false) && ((u4t_now - g_u4t_sw_press_ms) >= SW_HOLD_MS))

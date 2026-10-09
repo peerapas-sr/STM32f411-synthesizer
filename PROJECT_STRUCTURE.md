@@ -84,7 +84,7 @@ graph TD
 | **Key 2** | **PB3** | Input Pull-Up | Note 2 (RE / LA) / Playback Toggle Combo Key (with Key 3) |
 | **Key 3** | **PB5** | Input Pull-Up | Note 3 (MI / TI) / Playback Toggle Combo Key (with Key 2) |
 | **Key 4** | **PB4** | Input Pull-Up | Note 4 (FA / HIGH DO) / Record Toggle Combo Key (with Key 1) |
-| **Joy SW** | **PC2** | Input Pull-Up + EXTI2 Falling Edge | HW-504 Center Push Switch (Short/Long click debounce FSM) |
+| **Joy SW** | **PC2** | Input Pull-Up + EXTI2 Both Edges | HW-504 Center Push Switch: EXTI2 edge -> 30 ms debounce -> Short/Long click FSM |
 | **Buzzer** | **PB7** | AF2 (TIM4_CH2, Push-Pull, High Speed) | Hardware PWM Audio Tone Generator with Quadratic Volume Duty Modulation |
 | **Blue LED** (top) | **PA5** | Output Push-Pull | Live / Playback: Key 1 note sounding |
 | **Red LED** | **PA6** | Output Push-Pull | Live / Playback: Key 2 note sounding · Recording: blinks every 200 ms |

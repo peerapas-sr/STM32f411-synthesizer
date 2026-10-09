@@ -105,7 +105,7 @@ graph TD
 | **Key 2** | **PB3** | Input Pull-Up | Note 2 (RE / LA) & Playback Combo Key |
 | **Key 3** | **PB5** | Input Pull-Up | Note 3 (MI / TI) & Playback Combo Key |
 | **Key 4** | **PB4** | Input Pull-Up | Note 4 (FA / HIGH DO) & Record Combo Key |
-| **Joystick SW** | **PC2** | Input Pull-Up + EXTI2 Falling Edge | HW-504 Center Push Switch (Short/Long click) |
+| **Joystick SW** | **PC2** | Input Pull-Up + EXTI2 Both Edges | HW-504 Center Push Switch (Short/Long click, edge-triggered by EXTI2) |
 | **Buzzer Out** | **PB7** | AF2 (TIM4_CH2, Push-Pull, Very High Speed) | Hardware PWM Audio Output with Quadratic Volume Pulse Shaping |
 | **Blue LED** (top) | **PA5** | Output Push-Pull | Live / Playback: Key 1 note sounding |
 | **Red LED** | **PA6** | Output Push-Pull | Live / Playback: Key 2 note sounding · Recording: blinks every 200 ms |
@@ -122,7 +122,7 @@ To ensure zero audio glitching and eliminate CPU stalls, interrupts are strictly
 | :--- | :--- | :---: | :--- | :--- |
 | **`DMA1_Stream6_IRQn`** | `DMA1_Stream6_IRQHandler` | **2** | DMA1 Transfer Complete | Releases I2C DMA lock, halts DMA, issues hardware STOP condition. |
 | **`USART2_IRQn`** | `USART2_IRQHandler` | **2** | USART2 `RXNE` / `TXE` | RX: pushes bytes into a 64-byte ring buffer. TX: drains a 256-byte ring buffer, disables `TXEIE` when empty. |
-| **`EXTI2_IRQn`** | `EXTI2_IRQHandler` | **2** | PC2 Falling Edge | Latches Joystick SW press event flag for the main application loop. |
+| **`EXTI2_IRQn`** | `EXTI2_IRQHandler` | **2** | PC2 Falling + Rising Edge | Sets the Joystick SW edge flag. `bsp_joystick_service()` restarts a 30 ms debounce window on each edge, then reads the settled level once to produce Short / Long press events (no continuous pin polling). |
 | **`TIM3_IRQn`** | `TIM3_IRQHandler` | **3** | TIM3 Update (1 kHz) | Increments system millisecond counter `g_u4t_system_ms`. |
 | *DMA2 Stream 0* | *(No Interrupt)* | — | TIM3 TRGO Pulse | **Circular Mode**: Transfers 3 ADC conversions directly into SRAM. |
 | *TIM4 Channel 2* | *(No Interrupt)* | — | Hardware Counter | **Hardware PWM**: Autonomous square-wave audio on PB7 (Zero-CPU). |

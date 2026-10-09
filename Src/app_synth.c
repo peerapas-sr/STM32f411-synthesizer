@@ -744,15 +744,7 @@ void app_synth_run(void)
         uint32_t u4t_now = bsp_timer_get_ms();
         joy_sw_event_t joy_evt = JOY_SW_EVT_NONE;
 
-        if (bsp_gpio_get_exti_flag() == true)
-        {
-            bsp_gpio_clear_exti_flag();    /* Joystick SW EXTI event; the switch itself is read by the debouncer */
-        }
-        else
-        {
-            /* No action required */
-        }
-        bsp_joystick_service(u4t_now);
+        bsp_joystick_service(u4t_now);    /* Joystick axes + SW events from EXTI2 */
         synth_handle_uart_rx(u4t_now);
 
         /* Joystick SW: short press ends recording / toggles playback, long press toggles recording */

@@ -49,12 +49,12 @@ void bsp_gpio_init(void)
     GPIOC->PUPDR &= ~GPIO_PUPDR_PUPD2;
     GPIOC->PUPDR |= GPIO_PUPDR_PUPD2_0;
 
-    /* --- Setup EXTI Line 2 on PC2: falling edge (press, active low) --- */
+    /* --- Setup EXTI Line 2 on PC2: both edges (falling = press, rising = release) --- */
     SYSCFG->EXTICR[0] &= ~SYSCFG_EXTICR1_EXTI2;
     SYSCFG->EXTICR[0] |= SYSCFG_EXTICR1_EXTI2_PC;
     EXTI->IMR |= EXTI_IMR_MR2;
     EXTI->FTSR |= EXTI_FTSR_TR2;
-    EXTI->RTSR &= ~EXTI_RTSR_TR2;
+    EXTI->RTSR |= EXTI_RTSR_TR2;
     NVIC_SetPriority(EXTI2_IRQn, EXTI2_NVIC_PRIORITY);
     NVIC_EnableIRQ(EXTI2_IRQn);
 }
@@ -151,7 +151,7 @@ void bsp_gpio_clear_exti_flag(void)
     g_b_joy_sw_exti_flag = false;
 }
 
-/* EXTI Line 2 ISR: Joystick SW (PC2) pressed */
+/* EXTI Line 2 ISR: Joystick SW (PC2) changed level (press or release); bsp_joystick_service() debounces it */
 void EXTI2_IRQHandler(void)
 {
     if ((EXTI->PR & EXTI_PR_PR2) != 0U)

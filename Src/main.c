@@ -6,7 +6,7 @@
  *
  * Requirements Satisfied:
  *   [1] GPIO                  : 4 Keys In (PA10, PB3, PB5, PB4), HW-504 SW (PC2), Red LED (PA6)
- *   [2] UART (Interrupt/DMA)  : USART2 115200 bps via RX Interrupt (NO Polling)
+ *   [2] UART (Interrupt)      : USART2 115200 bps via RXNE/TXE Interrupt ring buffers (NO Polling)
  *   [3] ADC (Interrupt/DMA)   : 3-Channel ADC1 via TIM3 TRGO & DMA2 Stream 0 (Zero CPU)
  *   [4] External Interrupt    : EXTI Line 10 on PA10 [Key 1]
  *   [5] Additional Peripheral : TIM3 Hardware Timer 1ms Periodic Interrupt & TRGO Output
@@ -23,7 +23,6 @@
 #include "bsp_adc.h"
 #include "bsp_uart.h"
 #include "bsp_buzzer.h"
-#include "bsp_joystick.h"
 #include "bsp_timer.h"
 #include "bsp_oled.h"
 #include "app_synth.h"
@@ -46,8 +45,7 @@ int main(void)
     bsp_gpio_init();     /* 4 Keys, HW-504 SW (PC2) & EXTI10 on PA10 */
     bsp_buzzer_init();   /* Hardware PWM Buzzer on PB7 (TIM4_CH2) */
     bsp_adc_init();      /* 3-Channel ADC1 via TIM3 TRGO & DMA2 Stream 0 */
-    bsp_joystick_init(); /* HW-504 Dual-Axis Joystick Driver */
-    bsp_uart_init();     /* USART2 with RXNE Interrupt (No Polling) */
+    bsp_uart_init();     /* USART2 with RXNE/TXE Interrupts (No Polling) */
     bsp_timer_init();    /* TIM3 1ms Periodic Interrupt & TRGO Trigger */
     bsp_oled_init();     /* 1.30" I2C OLED with DMA1 Stream 6 Channel 1 */
 

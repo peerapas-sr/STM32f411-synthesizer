@@ -1,174 +1,127 @@
 /*******************************************************************************
  * File Name   : bsp_uart.c
- * Description : USART2 Driver - 100% Interrupt-Driven TX & RX (Zero Polling)
+ * Description : USART2 (PA2 TX / PA3 RX, 115200 bps) - 100% Interrupt-Driven TX & RX
+ *               Ring buffers filled/drained by USART2_IRQHandler (RXNE / TXE): Zero Polling
  * Target MCU  : STM32F411RET6
  * Standard    : Toyota Embedded MISRA-C Compliant (22 Rules)
  ******************************************************************************/
 
 #include "bsp_uart.h"
-#ifndef STM32F411xE
 #define STM32F411xE
-#endif
 #include "stm32f4xx.h"
 
 /* Named Constants (Rule 5 & Rule 10) */
 #define UART_RX_BUFFER_SIZE     (64U)
 #define UART_TX_BUFFER_SIZE     (256U)
-#define USART2_BRR_115200       (139U)
+#define USART2_BRR_115200       (139U)     /* 16 MHz / 115200 */
 #define USART2_NVIC_PRIORITY    (2U)
+#define UART_DEC_MAX_DIGITS     (10U)
+#define UART_PINS_MODE_MASK     ((3UL << 4U) | (3UL << 6U))      /* PA2, PA3 */
+#define UART_PINS_AF_MODE       ((2UL << 4U) | (2UL << 6U))
+#define UART_PINS_PULL_UP       ((1UL << 4U) | (1UL << 6U))
+#define UART_PINS_AF_MASK       ((0xFUL << 8U) | (0xFUL << 12U))
+#define UART_PINS_AF7           ((7UL << 8U) | (7UL << 12U))
 
-/* Circular RX buffer managed by Interrupt Service Routine */
 static volatile char     g_c_rx_buffer[UART_RX_BUFFER_SIZE];
 static volatile uint8_t  g_u1t_rx_head = 0U;
 static volatile uint8_t  g_u1t_rx_tail = 0U;
-
-/* Circular TX buffer managed by Interrupt Service Routine */
 static volatile char     g_c_tx_buffer[UART_TX_BUFFER_SIZE];
 static volatile uint16_t g_u2t_tx_head = 0U;
 static volatile uint16_t g_u2t_tx_tail = 0U;
 
 void bsp_uart_init(void)
 {
-    /* 1. Enable Clocks for GPIOA and USART2 */
     RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
     RCC->APB1ENR |= RCC_APB1ENR_USART2EN;
 
-    /* 2. Configure PA2 (TX) and PA3 (RX) as Alternate Function AF7 */
-    GPIOA->MODER &= ~((3UL << (2U * 2U)) | (3UL << (3U * 2U)));
-    GPIOA->MODER |=  ((2UL << (2U * 2U)) | (2UL << (3U * 2U))); /* AF mode */
+    /* PA2 (TX) / PA3 (RX): AF7, high speed, pull-up */
+    GPIOA->MODER = (GPIOA->MODER & ~UART_PINS_MODE_MASK) | UART_PINS_AF_MODE;
+    GPIOA->AFR[0] = (GPIOA->AFR[0] & ~UART_PINS_AF_MASK) | UART_PINS_AF7;
+    GPIOA->OSPEEDR |= UART_PINS_MODE_MASK;
+    GPIOA->PUPDR = (GPIOA->PUPDR & ~UART_PINS_MODE_MASK) | UART_PINS_PULL_UP;
 
-    GPIOA->AFR[0] &= ~((0xFUL << (2U * 4U)) | (0xFUL << (3U * 4U)));
-    GPIOA->AFR[0] |=  ((7UL   << (2U * 4U)) | (7UL   << (3U * 4U))); /* AF7 (USART2) */
-
-    GPIOA->OSPEEDR |= ((3UL << (2U * 2U)) | (3UL << (3U * 2U)));
-    GPIOA->PUPDR   &= ~((3UL << (2U * 2U)) | (3UL << (3U * 2U)));
-    GPIOA->PUPDR   |=  ((1UL << (2U * 2U)) | (1UL << (3U * 2U))); /* Pull-up */
-
-    /* 3. Configure Baud Rate = 115200 at 16 MHz APB1 clock (BRR = 139) */
+    /* 115200 8N1, TX + RX enabled, RXNE interrupt (TXE interrupt enabled on demand) */
     USART2->BRR = USART2_BRR_115200;
-
-    /* 4. Enable Transmitter, Receiver, and RXNE Interrupt */
-    USART2->CR1 = (USART_CR1_TE | USART_CR1_RE | USART_CR1_RXNEIE);
-    USART2->CR1 |= USART_CR1_UE; /* Enable USART */
-
-    /* 5. Configure NVIC for USART2 Interrupt */
+    USART2->CR1 = (USART_CR1_TE | USART_CR1_RE | USART_CR1_RXNEIE | USART_CR1_UE);
     NVIC_SetPriority(USART2_IRQn, USART2_NVIC_PRIORITY);
     NVIC_EnableIRQ(USART2_IRQn);
 }
 
-/* Transmit a single character via TX Ring Buffer and TXE Interrupt (Zero Polling) */
-void bsp_uart_send_char(char c_val)
+/* Queue one character; the TXE interrupt shifts it out. Drops the byte if the buffer is full. */
+static void uart_send_char(char c_val)
 {
-    uint16_t u2t_next_head = (uint16_t)((g_u2t_tx_head + 1U) % UART_TX_BUFFER_SIZE);
+    uint16_t u2t_next = (uint16_t)((g_u2t_tx_head + 1U) % UART_TX_BUFFER_SIZE);
 
-    /* Enqueue character if space is available */
-    if (u2t_next_head != g_u2t_tx_tail)
+    if (u2t_next != g_u2t_tx_tail)
     {
         g_c_tx_buffer[g_u2t_tx_head] = c_val;
-        g_u2t_tx_head = u2t_next_head;
-
-        /* Enable TXE interrupt: ISR will shift byte out to USART_DR automatically */
+        g_u2t_tx_head = u2t_next;
         USART2->CR1 |= USART_CR1_TXEIE;
     }
-    else
-    {
-        /* Buffer full: drop byte to prevent corruption without blocking CPU */
-    }
 }
 
-/* Transmit null-terminated string */
 void bsp_uart_send_string(const char *p_str)
 {
-    if (p_str != (const char *)0)
+    const char *p_ch = p_str;
+
+    while (*p_ch != '\0')
     {
-        const char *p_curr = p_str;
-        while (*p_curr != '\0')
-        {
-            bsp_uart_send_char(*p_curr);
-            p_curr++;
-        }
-    }
-    else
-    {
-        /* Null pointer passed */
+        uart_send_char(*p_ch);
+        p_ch++;
     }
 }
 
-/* Transmit 32-bit unsigned integer as ASCII decimal string */
+/* Unsigned decimal: digits are produced least-significant first, then sent in reverse */
 void bsp_uart_send_dec(uint32_t u4t_val)
 {
-    char c_buf[11];
-    uint32_t u4t_temp = u4t_val;
-    uint8_t u1t_pos = 0U;
+    char c_buf[UART_DEC_MAX_DIGITS];
+    uint32_t u4t_rem = u4t_val;
+    uint8_t u1t_len = 0U;
 
-    if (u4t_temp == 0U)
+    if (u4t_rem == 0U)
     {
-        bsp_uart_send_char('0');
+        uart_send_char('0');
     }
-    else
+    while (u4t_rem > 0U)
     {
-        while (u4t_temp > 0U)
-        {
-            c_buf[u1t_pos] = (char)('0' + (u4t_temp % 10U));
-            u4t_temp /= 10U;
-            u1t_pos++;
-        }
-        while (u1t_pos > 0U)
-        {
-            u1t_pos--;
-            bsp_uart_send_char(c_buf[u1t_pos]);
-        }
+        c_buf[u1t_len] = (char)('0' + (u4t_rem % 10U));
+        u4t_rem /= 10U;
+        u1t_len++;
+    }
+    while (u1t_len > 0U)
+    {
+        u1t_len--;
+        uart_send_char(c_buf[u1t_len]);
     }
 }
 
-/* Check if character available in RX buffer */
-bool bsp_uart_has_rx_char(void)
+/* Pop one received character; returns false when the RX buffer is empty */
+bool bsp_uart_read_char(char *p_c)
 {
-    return (g_u1t_rx_head != g_u1t_rx_tail);
-}
+    bool b_have = (g_u1t_rx_head != g_u1t_rx_tail);
 
-/* Read character from RX buffer */
-char bsp_uart_get_rx_char(void)
-{
-    char c_char = '\0';
-    if (g_u1t_rx_head != g_u1t_rx_tail)
+    if (b_have == true)
     {
-        c_char = g_c_rx_buffer[g_u1t_rx_tail];
+        *p_c = g_c_rx_buffer[g_u1t_rx_tail];
         g_u1t_rx_tail = (uint8_t)((g_u1t_rx_tail + 1U) % UART_RX_BUFFER_SIZE);
     }
-    else
-    {
-        /* Buffer empty */
-    }
-    return c_char;
+    return b_have;
 }
 
-/* USART2 Interrupt Service Routine: 100% Interrupt-Driven RX and TX */
+/* USART2 ISR: RXNE -> push into RX ring, TXE -> pop from TX ring (disable TXE when empty) */
 void USART2_IRQHandler(void)
 {
-    /* 1. Handle Receive Data Register Not Empty (RXNE) */
     if ((USART2->SR & USART_SR_RXNE) != 0U)
     {
-        char c_rx_byte = (char)(USART2->DR & 0xFFU);
-        uint8_t u1t_next_head = (uint8_t)((g_u1t_rx_head + 1U) % UART_RX_BUFFER_SIZE);
-
-        /* Prevent buffer overflow */
-        if (u1t_next_head != g_u1t_rx_tail)
+        char c_rx = (char)(USART2->DR & 0xFFU);
+        uint8_t u1t_next = (uint8_t)((g_u1t_rx_head + 1U) % UART_RX_BUFFER_SIZE);
+        if (u1t_next != g_u1t_rx_tail)
         {
-            g_c_rx_buffer[g_u1t_rx_head] = c_rx_byte;
-            g_u1t_rx_head = u1t_next_head;
-        }
-        else
-        {
-            /* Buffer full: drop byte to prevent corruption */
+            g_c_rx_buffer[g_u1t_rx_head] = c_rx;
+            g_u1t_rx_head = u1t_next;
         }
     }
-    else
-    {
-        /* No RX event */
-    }
 
-    /* 2. Handle Transmit Data Register Empty (TXE) */
     if (((USART2->SR & USART_SR_TXE) != 0U) && ((USART2->CR1 & USART_CR1_TXEIE) != 0U))
     {
         if (g_u2t_tx_head != g_u2t_tx_tail)
@@ -178,12 +131,7 @@ void USART2_IRQHandler(void)
         }
         else
         {
-            /* Buffer empty: disable TXE interrupt */
             USART2->CR1 &= ~USART_CR1_TXEIE;
         }
-    }
-    else
-    {
-        /* No TX event */
     }
 }

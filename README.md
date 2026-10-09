@@ -15,7 +15,7 @@ Built without heavy vendor HAL libraries using direct CMSIS register manipulatio
 - **64-Step Sequence Recorder & Looper**: Records notes, active durations, and rest gaps with seamless infinite looping playback.
 - **Note Release Sustain Engine**: Features a 150 ms acoustic decay tail upon note release and zero-latency monophonic legato preemption.
 - **Dual-Axis Analog Joystick Controls**:
-  - **Pitch Bend**: Smooth $\pm 200$ Cents modulation using a fast integer Q16 polynomial calculation.
+  - **Pitch Bend**: Smooth $\pm 200$ Cents modulation using a 21-point Q12 ratio lookup table with linear interpolation.
   - **Octave Bank Switching**: Instant toggle between Low Bank (C7–F7) and High Bank (G7–C8).
   - **Center Switch**: Short-click / long-press debounce FSM for playback and recording toggles.
 - **1.30" I2C OLED Virtual Piano UI (SH1106 / SSD1306)**:
@@ -60,7 +60,7 @@ graph TD
         TIM4[TIM4: 1 MHz Microsecond Tone Generator]
         I2C1_DMA1[I2C1 + DMA1 Stream 6 Ch 1]
         ADC1_DMA2[ADC1 + DMA2 Stream 0 Ch 0]
-        TIM3[TIM3: 1 kHz Master TRGO & SysTick]
+        TIM3[TIM3: 1 kHz Master TRGO & 1 ms Tick]
         USART2[USART2 RXNE Interrupt]
         EXTI10[EXTI Line 10 on PA10]
     end
@@ -99,7 +99,7 @@ graph TD
 | **Key 3** | **PB5** | Input Pull-Up | Note 3 (MI / TI) & Playback Combo Key |
 | **Key 4** | **PB4** | Input Pull-Up | Note 4 (FA / HIGH DO) & Record Combo Key |
 | **Joystick SW** | **PC2** | Input Pull-Up | HW-504 Center Push Switch (Short/Long click) |
-| **Buzzer Out** | **PB7** | AF2 (TIM4_CH2, Push-Pull, High Speed) | Hardware PWM Audio Output with Cubic Volume Pulse Shaping |
+| **Buzzer Out** | **PB7** | AF2 (TIM4_CH2, Push-Pull, High Speed) | Hardware PWM Audio Output with Quadratic Volume Pulse Shaping |
 | **Red LED** | **PA6** | Output Push-Pull | Recording / Sustain / Combo Status Indicator |
 
 ---
@@ -171,7 +171,7 @@ Connect a serial terminal (PuTTY, Tera Term, minicom) to the Nucleo Virtual COM 
 │   ├── bsp_adc.c          # ADC1 + TIM3 TRGO + DMA2 circular engine
 │   ├── bsp_buzzer.c       # Hardware PWM tone & volume pulse shaper (PB7 / TIM4_CH2)
 │   ├── bsp_gpio.c         # GPIO setup, LED control & EXTI15_10 ISR
-│   ├── bsp_joystick.c     # Joystick EMA filtering, calibration & switch FSM
+│   ├── bsp_joystick.c     # Joystick EMA filtering, deadzone & switch FSM
 │   ├── bsp_oled.c         # 1024B Framebuffer, I2C1 bus recovery & DMA ISR
 │   ├── bsp_timer.c        # TIM3 1ms tick & microsecond delays
 │   └── bsp_uart.c         # USART2 RXNE interrupt driver & ring buffer
@@ -202,7 +202,7 @@ make -j4 all
 ### Compiler Flags
 The project is strictly compiled with:
 ```bash
--mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard -O2 -Wall -Wextra -Werror -std=c99
+-mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard -std=gnu11 -O0 -g3 -Wall
 ```
 
 ---

@@ -83,8 +83,4 @@ void TIM3_IRQHandler(void)
         TIM3->SR &= ~TIM_SR_UIF; /* Clear interrupt flag */
         g_u4t_system_ms++;
     }
-    else
-    {
-        /* Other timer event */
-    }
 }

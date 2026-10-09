@@ -67,14 +67,6 @@ void bsp_buzzer_set_tone(uint32_t u4t_freq_hz, uint16_t u2t_vol_adc)
         uint32_t u4t_period_us = SEC_TO_US_FACTOR / u4t_freq_hz;
         uint32_t u4t_max_high = u4t_period_us / 2U;
 
-        if (u4t_max_high == 0U)
-        {
-            u4t_max_high = 1U;
-        }
-        else
-        {
-            /* Period is valid */
-        }
 
         /* Quadratic perceptual volume curve: (vol_adc / 4095)^2 */
         uint32_t u4t_v = (uint32_t)u2t_vol_adc;
@@ -98,14 +90,11 @@ void bsp_buzzer_set_tone(uint32_t u4t_freq_hz, uint16_t u2t_vol_adc)
         TIM4->ARR  = u4t_period_us - 1U;
         TIM4->CCR2 = u4t_high;
 
+        /* Start once; while running, preloaded ARR/CCR2 update seamlessly at the next period */
         if ((TIM4->CR1 & TIM_CR1_CEN) == 0U)
         {
             TIM4->EGR = TIM_EGR_UG;
             TIM4->CR1 |= TIM_CR1_CEN;
-        }
-        else
-        {
-            /* Timer is already running; shadow preload registers update seamlessly */
         }
     }
 }

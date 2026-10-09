@@ -28,7 +28,7 @@ graph TD
         AppSynth --> BSP_BUZZER[bsp_buzzer.c: Tone Generation]
         AppSynth --> BSP_JOY[bsp_joystick.c: EMA Filtering + Norm]
         AppSynth --> BSP_UART[bsp_uart.c: USART2 RXNE/TXE Interrupts]
-        AppSynth --> BSP_GPIO[bsp_gpio.c: 4 Keys, SW, LED, EXTI2]
+        AppSynth --> BSP_GPIO[bsp_gpio.c: 4 Keys, SW, 4 LEDs, EXTI2]
         AppSynth --> BSP_TIMER[bsp_timer.c: TIM3 1 ms Tick + TRGO]
     end
 
@@ -59,8 +59,8 @@ graph TD
 | [`Inc/bsp_joystick.h`](file:///z:/Embedsystemtoyota/Project/Inc/bsp_joystick.h) | BSP | APIs: `bsp_joystick_service(uint32_t u4t_now)`, `bsp_joystick_get_norm_x(void)`, `bsp_joystick_get_norm_y(void)`, `bsp_joystick_get_event(void)`. |
 | [`Src/bsp_timer.c`](file:///z:/Embedsystemtoyota/Project/Src/bsp_timer.c) | BSP | TIM3 hardware timer (1 kHz TRGO trigger) and non-blocking millisecond tick / microsecond delay utilities (`bsp_delay_us()`, `bsp_delay_ms()`). |
 | [`Inc/bsp_timer.h`](file:///z:/Embedsystemtoyota/Project/Inc/bsp_timer.h) | BSP | APIs: `bsp_timer_init(void)`, `bsp_timer_get_ms(void)`, `bsp_delay_us(uint32_t u4t_us)`, `bsp_delay_ms(uint32_t u4t_ms)`. |
-| [`Src/bsp_gpio.c`](file:///z:/Embedsystemtoyota/Project/Src/bsp_gpio.c) | BSP | GPIO initialization: 4 Keys (PA10, PB3, PB5, PB4), HW-504 SW (PC2), Red LED (PA6), and EXTI Line 2 interrupt on PC2 (Joystick SW). `bsp_gpio_read_keys()` is branchless (bit-shift of inverted IDR). |
-| [`Inc/bsp_gpio.h`](file:///z:/Embedsystemtoyota/Project/Inc/bsp_gpio.h) | BSP | APIs: `bsp_gpio_init(void)`, `bsp_gpio_read_keys(void)`, `bsp_gpio_read_joystick_switch(void)`, `bsp_gpio_led_red_set(bool b_state)`, `bsp_gpio_get_exti_flag()`, `bsp_gpio_clear_exti_flag()`. |
+| [`Src/bsp_gpio.c`](file:///z:/Embedsystemtoyota/Project/Src/bsp_gpio.c) | BSP | GPIO initialization: 4 Keys (PA10, PB3, PB5, PB4), HW-504 SW (PC2), 4 LEDs (PA5 blue, PA6 red, PA7 yellow, PB6 green), and EXTI Line 2 interrupt on PC2 (Joystick SW). `bsp_gpio_read_keys()` is branchless (bit-shift of inverted IDR). |
+| [`Inc/bsp_gpio.h`](file:///z:/Embedsystemtoyota/Project/Inc/bsp_gpio.h) | BSP | APIs: `bsp_gpio_init(void)`, `bsp_gpio_read_keys(void)`, `bsp_gpio_read_joystick_switch(void)`, `bsp_gpio_leds_set(uint8_t u1t_mask)` (bit n = LED of Key n+1: `LED_MASK_BLUE`, `LED_MASK_RED`, `LED_MASK_YELLOW`, `LED_MASK_GREEN`), `bsp_gpio_get_exti_flag()`, `bsp_gpio_clear_exti_flag()`. |
 | [`Src/bsp_buzzer.c`](file:///z:/Embedsystemtoyota/Project/Src/bsp_buzzer.c) | BSP | Audio generation: PB7 Hardware PWM (TIM4_CH2) tone generation with quadratic volume pulse shaping. |
 | [`Inc/bsp_buzzer.h`](file:///z:/Embedsystemtoyota/Project/Inc/bsp_buzzer.h) | BSP | APIs: `bsp_buzzer_init(void)`, `bsp_buzzer_set_tone(uint32_t u4t_freq_hz, uint16_t u2t_vol_adc)`, `bsp_buzzer_off(void)`. |
 | [`Src/bsp_uart.c`](file:///z:/Embedsystemtoyota/Project/Src/bsp_uart.c) | BSP | USART2 driver: 115200 bps, 8-N-1, 100% Interrupt-Driven RX (RXNE ring buffer) & TX (TXE ring buffer), zero CPU polling. |
@@ -86,7 +86,10 @@ graph TD
 | **Key 4** | **PB4** | Input Pull-Up | Note 4 (FA / HIGH DO) / Record Toggle Combo Key (with Key 1) |
 | **Joy SW** | **PC2** | Input Pull-Up + EXTI2 Falling Edge | HW-504 Center Push Switch (Short/Long click debounce FSM) |
 | **Buzzer** | **PB7** | AF2 (TIM4_CH2, Push-Pull, High Speed) | Hardware PWM Audio Tone Generator with Quadratic Volume Duty Modulation |
-| **Red LED** | **PA6** | Output Push-Pull | Recording Mode Flash / Note & Sustain Indicator / Combo Feedback |
+| **Blue LED** (top) | **PA5** | Output Push-Pull | Live / Playback: Key 1 note sounding |
+| **Red LED** | **PA6** | Output Push-Pull | Live / Playback: Key 2 note sounding · Recording: blinks every 200 ms |
+| **Yellow LED** | **PA7** | Output Push-Pull | Live / Playback: Key 3 note sounding |
+| **Green LED** (bottom) | **PB6** | Output Push-Pull | Live / Playback: Key 4 note sounding |
 
 ---
 
@@ -139,7 +142,7 @@ graph TD
   - **Acoustic Decay Simulation**: When a physical key or UART note is released, the synthesizer sustains tone playback for 150 ms instead of cutting off immediately, creating a smooth natural sound.
   - **Monophonic Legato Transition**: When transitioning between notes, pressing a new key immediately preempts the active sustain window with zero latency.
   - **Combo Safety**: Pressing combo chords (K1+K4 or K2+K3) or stopping/starting playback instantly clears the sustain window, preventing stuck notes during mode transitions.
-  - **Visual Synchronization**: The OLED virtual piano active key highlight and Red LED indicator remain illuminated throughout the sustain window for complete sensory feedback.
+  - **Visual Synchronization**: The OLED virtual piano active key highlight and the key LED (live mode) remain illuminated throughout the sustain window for complete sensory feedback.
 - **Pitch Bend & Vibrato**: Joystick X bends ±200 cents; Joystick Y up adds a 200 ms triangle-LFO vibrato up to ±50 cents. The sum is clamped to ±250 cents and converted with the 21-point Q12 ratio table `PITCH_RATIO_Q12` (25-cent steps, linear interpolation).
 - **Mode FSM** (`synth_set_mode()` leaves the old mode cleanly, then enters the new one; `synth_toggle_mode()` wraps it):
   - Modes: `MODE_LIVE`, `MODE_RECORDING`, `MODE_PLAYING`.

@@ -31,7 +31,7 @@
 #define COMBO_SKEW_WINDOW_MS        (700U)
 #define UART_NOTE_DUR_MS            (300U)
 #define NOTE_SUSTAIN_MS             (150U)
-#define REC_LED_BLINK_MS            (200U)
+#define LED_BLINK_MS                (200U)
 #define TONE_C4_HZ                  (262U)
 #define TONE_C6_HZ                  (1047U)
 #define TONE_G6_HZ                  (1568U)
@@ -135,10 +135,9 @@ static void synth_beep(uint32_t u4t_first_hz, uint32_t u4t_second_hz)
     bsp_buzzer_off();
 }
 
-/* Drive buzzer at frequency with volume percent and light the LED */
+/* Drive buzzer at frequency with volume percent */
 static void synth_sound(uint32_t u4t_freq, uint8_t u1t_vol_pct)
 {
-    bsp_gpio_led_red_set(true);
     bsp_buzzer_set_tone(u4t_freq, (uint16_t)(((uint32_t)u1t_vol_pct * VOLUME_RAW_MAX) / PERCENT_SCALE));
 }
 
@@ -171,7 +170,8 @@ static void synth_set_mode(synth_mode_t new_mode, uint32_t u4t_now)
 {
     g_s1t_sustain_note = -1;
     bsp_buzzer_off();
-    bsp_gpio_led_red_set(false);
+    g_u4t_blink_ms = u4t_now;
+    g_b_blink_on = true;
     if (g_mode == MODE_RECORDING)
     {
         synth_rec_close_note(u4t_now, REC_DEF_REST_MS);
@@ -195,9 +195,6 @@ static void synth_set_mode(synth_mode_t new_mode, uint32_t u4t_now)
         g_mode = MODE_RECORDING;
         g_u2t_seq_count = 0U;
         g_s1t_rec_note = -1;
-        g_u4t_blink_ms = u4t_now;
-        g_b_blink_on = true;
-        bsp_gpio_led_red_set(true);
         synth_beep(TONE_C6_HZ, TONE_G6_HZ);
         bsp_uart_send_string("[RECORDER] Recording Started!\r\n");
     }
@@ -369,7 +366,7 @@ static uint32_t synth_modulated_freq(int8_t s1t_note, int32_t s4t_norm_x, int32_
     return (NOTE_FREQ[s1t_note] * u4t_ratio) >> PITCH_Q12_SHIFT;
 }
 
-/* Recording Mode: append a step on every note change / release, blink LED while idle */
+/* Recording Mode: append a step on every note change / release */
 static void synth_update_recording(uint32_t u4t_now, int8_t s1t_note)
 {
     if ((s1t_note >= 0) && (s1t_note != g_s1t_rec_note))
@@ -394,19 +391,10 @@ static void synth_update_recording(uint32_t u4t_now, int8_t s1t_note)
         g_s1t_rec_note = s1t_note;
         g_u4t_rec_note_start_ms = u4t_now;
     }
-    else if (s1t_note < 0)
+    else if ((s1t_note < 0) && (g_s1t_rec_note >= 0))
     {
-        if ((u4t_now - g_u4t_blink_ms) >= REC_LED_BLINK_MS)
-        {
-            g_u4t_blink_ms = u4t_now;
-            g_b_blink_on = (g_b_blink_on == false);
-            bsp_gpio_led_red_set(g_b_blink_on);
-        }
-        if (g_s1t_rec_note >= 0)
-        {
-            synth_rec_close_note(u4t_now, REC_DEF_REST_MS);
-            g_u4t_rec_last_release_ms = u4t_now;
-        }
+        synth_rec_close_note(u4t_now, REC_DEF_REST_MS);
+        g_u4t_rec_last_release_ms = u4t_now;
     }
     else
     {
@@ -433,7 +421,6 @@ static void synth_update_playback(uint32_t u4t_now, uint8_t u1t_vol_pct)
             g_b_play_in_note = false;
             g_u4t_play_step_start_ms = u4t_now;
             bsp_buzzer_off();
-            bsp_gpio_led_red_set(false);
         }
     }
     else if ((u4t_elapsed >= (uint32_t)p_step->rest_ms) && (u4t_elapsed >= PLAY_MIN_GAP_MS))
@@ -471,12 +458,46 @@ static void synth_update_live_sound(int8_t s1t_note, uint8_t u1t_vol_pct, int32_
     else
     {
         bsp_buzzer_off();
-        if (g_mode != MODE_RECORDING)
-        {
-            bsp_gpio_led_red_set(false);    /* While recording the LED blinks instead */
-        }
         g_s1t_last_played = -1;
     }
+}
+
+/* LEDs: Live / Playback = LED of the sounding key (1-4, either bank), Recording = red blink */
+static void synth_update_leds(int8_t s1t_note, uint32_t u4t_now)
+{
+    uint8_t u1t_mask = 0U;
+    int8_t s1t_key = s1t_note;
+
+    if ((u4t_now - g_u4t_blink_ms) >= LED_BLINK_MS)
+    {
+        g_u4t_blink_ms = u4t_now;
+        g_b_blink_on = (g_b_blink_on == false);
+    }
+    if (g_mode == MODE_PLAYING)
+    {
+        s1t_key = -1;    /* Rest phase between steps: all LEDs off */
+        if (g_b_play_in_note == true)
+        {
+            s1t_key = g_sequence[g_u2t_play_step].note_index;
+        }
+    }
+
+    if (g_mode == MODE_RECORDING)
+    {
+        if (g_b_blink_on == true)
+        {
+            u1t_mask = LED_MASK_RED;
+        }
+    }
+    else if (s1t_key >= 0)
+    {
+        u1t_mask = (uint8_t)(1U << ((uint8_t)s1t_key % SYNTH_NUM_KEYS));
+    }
+    else
+    {
+        /* Silence: all LEDs off */
+    }
+    bsp_gpio_leds_set(u1t_mask);
 }
 
 /* OLED Virtual Piano UI: redraw framebuffer every 30 ms; bsp_oled_service streams it via DMA */
@@ -632,6 +653,7 @@ void app_synth_run(void)
             }
             synth_update_live_sound(s1t_note, u1t_vol_pct, s4t_norm_x, s4t_norm_y, u4t_now);
         }
+        synth_update_leds(s1t_note, u4t_now);
         synth_update_display(u4t_now, s1t_note, u1t_vol_pct, s4t_norm_x, s4t_norm_y);
     }
 }

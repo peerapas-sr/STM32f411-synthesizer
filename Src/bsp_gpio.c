@@ -1,6 +1,6 @@
 /*******************************************************************************
  * File Name   : bsp_gpio.c
- * Description : 4 Keys (PA10, PB3, PB5, PB4), Joystick SW (PC2 + EXTI2), Red LED (PA6)
+ * Description : 4 Keys (PA10, PB3, PB5, PB4), Joystick SW (PC2 + EXTI2), 4 LEDs (PA5, PA6, PA7, PB6)
  * Target MCU  : STM32F411RET6 (Nucleo-F411RE)
  * Standard    : Toyota Embedded MISRA-C Compliant (22 Rules)
  ******************************************************************************/
@@ -14,8 +14,13 @@
 #define EXTI_LINE_2_MASK        (1UL << JOY_SW_PIN)
 #define EXTICR1_LINE2_MASK      (0x0FUL << 8U)     /* EXTICR[0] bits 11:8 select the port of line 2 */
 #define EXTICR1_LINE2_PORTC     (0x02UL << 8U)     /* 0x2 = Port C */
-#define LED_RED_MODE_MASK       (3UL << (LED_RED_PIN * 2U))
-#define LED_RED_OUTPUT_MODE     (1UL << (LED_RED_PIN * 2U))
+#define PORTA_LEDS_BITS         ((1UL << LED_BLUE_PIN) | (1UL << LED_RED_PIN) | (1UL << LED_YELLOW_PIN))
+#define PORTA_LEDS_MODE_MASK    ((3UL << (LED_BLUE_PIN * 2U)) | (3UL << (LED_RED_PIN * 2U)) | (3UL << (LED_YELLOW_PIN * 2U)))
+#define PORTA_LEDS_OUTPUT_MODE  ((1UL << (LED_BLUE_PIN * 2U)) | (1UL << (LED_RED_PIN * 2U)) | (1UL << (LED_YELLOW_PIN * 2U)))
+#define PORTB_LED_BIT           (1UL << LED_GREEN_PIN)
+#define PORTB_LED_MODE_MASK     (3UL << (LED_GREEN_PIN * 2U))
+#define PORTB_LED_OUTPUT_MODE   (1UL << (LED_GREEN_PIN * 2U))
+#define BSRR_RESET_SHIFT        (16U)
 #define KEY1_MODE_MASK          (3UL << (KEY1_PIN * 2U))
 #define KEY1_PULL_UP            (1UL << (KEY1_PIN * 2U))
 #define PORTB_KEYS_MODE_MASK    ((3UL << (KEY2_PIN * 2U)) | (3UL << (KEY3_PIN * 2U)) | (3UL << (KEY4_PIN * 2U)))
@@ -30,11 +35,15 @@ void bsp_gpio_init(void)
     RCC->AHB1ENR |= (RCC_AHB1ENR_GPIOAEN | RCC_AHB1ENR_GPIOBEN | RCC_AHB1ENR_GPIOCEN);
     RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN;
 
-    /* PA6 Red LED: push-pull output, starts OFF */
-    GPIOA->BSRR = (1UL << (LED_RED_PIN + 16U));
-    GPIOA->MODER = (GPIOA->MODER & ~LED_RED_MODE_MASK) | LED_RED_OUTPUT_MODE;
-    GPIOA->OTYPER &= ~(1UL << LED_RED_PIN);
-    GPIOA->PUPDR &= ~LED_RED_MODE_MASK;
+    /* 4 LEDs (active high): PA5 blue, PA6 red, PA7 yellow, PB6 green - push-pull outputs, start OFF */
+    GPIOA->BSRR = (PORTA_LEDS_BITS << BSRR_RESET_SHIFT);
+    GPIOB->BSRR = (PORTB_LED_BIT << BSRR_RESET_SHIFT);
+    GPIOA->MODER = (GPIOA->MODER & ~PORTA_LEDS_MODE_MASK) | PORTA_LEDS_OUTPUT_MODE;
+    GPIOB->MODER = (GPIOB->MODER & ~PORTB_LED_MODE_MASK) | PORTB_LED_OUTPUT_MODE;
+    GPIOA->OTYPER &= ~PORTA_LEDS_BITS;
+    GPIOB->OTYPER &= ~PORTB_LED_BIT;
+    GPIOA->PUPDR &= ~PORTA_LEDS_MODE_MASK;
+    GPIOB->PUPDR &= ~PORTB_LED_MODE_MASK;
 
     /* Inputs with pull-up: PA10 (Key 1), PB3/PB5/PB4 (Keys 2-4), PC2 (Joystick SW) */
     GPIOA->MODER &= ~KEY1_MODE_MASK;
@@ -70,16 +79,16 @@ bool bsp_gpio_read_joystick_switch(void)
     return ((GPIOC->IDR & (1UL << JOY_SW_PIN)) == 0U);
 }
 
-void bsp_gpio_led_red_set(bool b_state)
+/* Set all 4 LEDs at once from a mask (LED_MASK_*): set bits ON, cleared bits OFF, via atomic BSRR writes */
+void bsp_gpio_leds_set(uint8_t u1t_mask)
 {
-    if (b_state == true)
-    {
-        GPIOA->BSRR = (1UL << LED_RED_PIN);
-    }
-    else
-    {
-        GPIOA->BSRR = (1UL << (LED_RED_PIN + 16U));
-    }
+    uint32_t u4t_a_on = (((uint32_t)u1t_mask & LED_MASK_BLUE) << LED_BLUE_PIN) |
+                        ((((uint32_t)u1t_mask & LED_MASK_RED) >> 1U) << LED_RED_PIN) |
+                        ((((uint32_t)u1t_mask & LED_MASK_YELLOW) >> 2U) << LED_YELLOW_PIN);
+    uint32_t u4t_b_on = (((uint32_t)u1t_mask & LED_MASK_GREEN) >> 3U) << LED_GREEN_PIN;
+
+    GPIOA->BSRR = u4t_a_on | ((PORTA_LEDS_BITS & ~u4t_a_on) << BSRR_RESET_SHIFT);
+    GPIOB->BSRR = u4t_b_on | ((PORTB_LED_BIT & ~u4t_b_on) << BSRR_RESET_SHIFT);
 }
 
 bool bsp_gpio_get_exti_flag(void)

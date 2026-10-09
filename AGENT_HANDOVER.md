@@ -157,7 +157,7 @@ Headers (Inc/*.h)	210	110	-100	-47.6%	มาโครที่ไม่ได้
 ---
 
 ## 5. Pass 2 Result (Claude Code)
-- Total: **3,284 -> 1,994 lines (-40%)**. See `CLAUDE.md` "Current Status" for the per-file table.
+- Total: **3,284 -> 2,034 lines (-38%)**. See `CLAUDE.md` "Current Status" for the per-file table.
 - Build 0 errors / 0 compiler warnings; `verify_misra.py` 0 violations; UART (RXNE/TXE ISR) and ADC (TIM3 TRGO + DMA2) still zero polling.
 - Features kept: 8 notes + bank switch, pitch bend, vibrato, 150 ms sustain, record / loop playback, K1+K4 / K2+K3 combos, UART commands and telemetry, OLED Virtual Piano with page-byte stride.
 - Behaviour changes: combo-skew note purge only on the K1+K4 combo; toggling playback while recording saves the recording first; `c` returns to live mode before clearing; `P:+`/`P:-` pixel dot removed; OLED shows a cleared screen until the first frame; startup chime notes are all 50 ms.

@@ -54,7 +54,7 @@ graph TD
         BSP_Joy[bsp_joystick.c: EMA Filter + Normalization]
         BSP_UART[bsp_uart.c: USART2 115.2k Ring Buffer]
         BSP_Timer[bsp_timer.c: 1ms Timebase & TRGO Engine]
-        BSP_GPIO[bsp_gpio.c: Keys, SW, LED & EXTI2]
+        BSP_GPIO[bsp_gpio.c: Keys, SW, 4 LEDs & EXTI2]
     end
 
     subgraph STM32F411_Hardware [STM32F411RE Hardware Peripherals]
@@ -107,7 +107,10 @@ graph TD
 | **Key 4** | **PB4** | Input Pull-Up | Note 4 (FA / HIGH DO) & Record Combo Key |
 | **Joystick SW** | **PC2** | Input Pull-Up + EXTI2 Falling Edge | HW-504 Center Push Switch (Short/Long click) |
 | **Buzzer Out** | **PB7** | AF2 (TIM4_CH2, Push-Pull, Very High Speed) | Hardware PWM Audio Output with Quadratic Volume Pulse Shaping |
-| **Red LED** | **PA6** | Output Push-Pull | On while a note sounds (incl. sustain tail), blinks every 200 ms while recording |
+| **Blue LED** (top) | **PA5** | Output Push-Pull | Live / Playback: Key 1 note sounding |
+| **Red LED** | **PA6** | Output Push-Pull | Live / Playback: Key 2 note sounding · Recording: blinks every 200 ms |
+| **Yellow LED** | **PA7** | Output Push-Pull | Live / Playback: Key 3 note sounding |
+| **Green LED** (bottom) | **PB6** | Output Push-Pull | Live / Playback: Key 4 note sounding |
 
 ---
 
@@ -138,17 +141,19 @@ To ensure zero audio glitching and eliminate CPU stalls, interrupts are strictly
 - **Vibrato (Joystick VRy Up)**: Depth grows with stick travel, up to $\pm 50$ Cents.
 - **Volume (PA4 Potentiometer)**: 0–100 %; the bottom ~2 % of travel mutes.
 - **Sustain**: A released note keeps sounding for 150 ms.
+- **LEDs**: The LED matching the key position lights while its note sounds, including the sustain tail: Key 1 = blue, Key 2 = red, Key 3 = yellow, Key 4 = green (same LED in either bank).
 
 ### 2. Sequence Recording & Looping Playback
 - **Toggle Recording Mode**:
   - **Hardware Combo**: Press and hold **Key 1 + Key 4** for 600 ms.
   - **Joystick**: Long-press center switch for 600 ms.
   - **UART**: Send `'r'` or `'R'`.
-  - *Feedback*: Red LED blinks every 200 ms; start/stop chirps; each recorded note is logged to UART. Recording stops automatically at 64 steps.
+  - *Feedback*: Red LED blinks every 200 ms (key LEDs are off); start/stop chirps; each recorded note is logged to UART. Recording stops automatically at 64 steps.
 - **Toggle Playback Mode**:
   - **Hardware Combo**: Press and hold **Key 2 + Key 3** for 600 ms.
   - **Joystick**: Short-click center switch.
   - **UART**: Send `'p'` or `'P'`.
+  - *Feedback*: The LED of each played note's key (blue / red / yellow / green) lights during the note and turns off during the rest gap.
   - *Behavior*: Plays recorded steps and **seamlessly loops back to step 0** indefinitely until stopped. Starting playback while recording saves the recording first; with an empty memory a low C4 beep is played instead.
 - **Clear Sequence**:
   - Send `'c'` or `'C'` via UART (returns to live mode first, saving any recording in progress).

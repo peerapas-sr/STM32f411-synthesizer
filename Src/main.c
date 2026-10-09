@@ -5,7 +5,7 @@
  * Standard    : Toyota Embedded MISRA-C Compliant (22 Rules)
  *
  * Requirements Satisfied:
- *   [1] GPIO                  : 4 Keys In (PA10, PB3, PB5, PB4), HW-504 SW (PC2), Red LED (PA6)
+ *   [1] GPIO                  : 4 Keys In (PA10, PB3, PB5, PB4), HW-504 SW (PC2), 4 LEDs (PA5 blue, PA6 red, PA7 yellow, PB6 green)
  *   [2] UART (Interrupt)      : USART2 115200 bps via RXNE/TXE Interrupt ring buffers (NO Polling)
  *   [3] ADC (Interrupt/DMA)   : 3-Channel ADC1 via TIM3 TRGO & DMA2 Stream 0 (Zero CPU)
  *   [4] External Interrupt    : EXTI Line 2 on PC2 [Joystick SW]

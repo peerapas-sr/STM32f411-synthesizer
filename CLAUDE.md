@@ -23,7 +23,7 @@ py C:\Users\books\.gemini\antigravity\brain\e254b936-2c29-49a3-84b3-f1b8ce12efe6
 1. **UART (Zero Polling)**: Strictly interrupt/DMA driven. `USART2_IRQHandler` uses circular ring buffers for RX (`RXNE`) and TX (`TXE`). ZERO polling `while(!(USART2->SR ...))` permitted.
 2. **ADC (Zero Polling)**: Strictly hardware timer triggered + DMA. ADC1 (PA4 Vol, PC0 VRx, PC1 VRy) triggered by TIM3 TRGO @ 1 kHz into DMA2 Stream 0 circular buffer. ZERO CPU polling.
 3. **External Interrupt**: At least 1 EXTI interrupt. Currently configured: EXTI Line 2 on PC2 (Joystick SW) with `EXTI2_IRQHandler`.
-4. **GPIO Configuration**: Clean Input Pull-Up (Keys, Joystick SW) and Output Push-Pull (PA6 Red LED).
+4. **GPIO Configuration**: Clean Input Pull-Up (Keys, Joystick SW) and Output Push-Pull (4 LEDs: PA5 blue, PA6 red, PA7 yellow, PB6 green). Live = LED of the sounding key (K1 blue, K2 red, K3 yellow, K4 green), Recording = red blink, Playback = LED of the played note's key.
 5. **Additional Peripherals (5 Peripherals required)**:
    - TIM3: 1 kHz TRGO trigger for ADC
    - TIM4: PB7 TIM4_CH2 Hardware PWM for buzzer tone generation
@@ -34,20 +34,20 @@ py C:\Users\books\.gemini\antigravity\brain\e254b936-2c29-49a3-84b3-f1b8ce12efe6
 7. **Software Architecture**: Clean separation between Application Layer (`app_synth`) and Driver Layer (`bsp_*`).
 
 ## Current Status (Pass 2 Condensation - Done, not yet tested on hardware)
-Option A condensation is complete: **3,284 -> 1,994 lines (-40%)**, measured by `verify_misra.py` (Src + Inc, excluding syscalls/sysmem).
+Option A condensation is complete: **3,284 -> 2,034 lines (-38%)**, measured by `verify_misra.py` (Src + Inc, excluding syscalls/sysmem).
 Build: 0 errors, 0 compiler warnings (4 newlib `_close/_write ... not implemented` linker notes are pre-existing). MISRA script: 0 violations.
 
 | Module / File | Before | After | Notes |
 |:---|:---:|:---:|:---|
-| `Src/app_synth.c` | 1,030 | 637 | One mode FSM (`synth_set_mode` / `synth_toggle_mode`), merged debounce + combos (`synth_scan_keys`), UART telemetry kept |
+| `Src/app_synth.c` | 1,030 | 659 | One mode FSM (`synth_set_mode` / `synth_toggle_mode`), merged debounce + combos (`synth_scan_keys`), UART telemetry kept |
 | `Src/bsp_oled.c` | 1,029 | 501 | Font packed 4 glyphs/line, single bounded `oled_wait()`, primitives file-private; recovery, keep-alive, DMA watchdog kept |
 | `Src/bsp_joystick.c` | 218 | 116 | Flat switch FSM, boot guard via initial state, no init function |
-| `Src/bsp_gpio.c` | 156 | 103 | Branchless `bsp_gpio_read_keys()`, LED via BSRR |
+| `Src/bsp_gpio.c` | 156 | 112 | Branchless `bsp_gpio_read_keys()`, 4 LEDs via `bsp_gpio_leds_set()` (BSRR) |
 | `Src/bsp_adc.c` | 195 | 85 | `bsp_adc_get_raw(ADC_IDX_*)` replaces `bsp_adc_get_joystick_raw()` |
 | `Src/bsp_uart.c` | 189 | 137 | `bsp_uart_read_char(&c)` replaces `has_rx_char/get_rx_char`; `send_char` is private |
 | buzzer + timer + main | 264 | 247 | Empty `else` blocks removed |
-| Headers | 203 | 168 | Unused APIs removed |
-| **Total** | **3,284** | **1,994** | **-40%** |
+| Headers | 203 | 177 | Unused APIs removed |
+| **Total** | **3,284** | **2,034** | **-38%** |
 
 ### Why not ~1,605
 About 30% of every file is lone `{` / `}` lines required by the brace rule (e.g. 179 of `app_synth.c`'s lines before logs were restored).

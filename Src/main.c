@@ -28,7 +28,7 @@
 #include "app_synth.h"
 
 /* Named Constants (Rule 5 & Rule 10) */
-#define FPU_CP10_CP11_FULL_ACCESS   (0xFUL)        /* 1111 = CP10 + CP11 full access */
+#define FPU_CP10_CP11_FULL_ACCESS   (0b1111U)      /* CP10 = 11, CP11 = 11: full access */
 #define SCB_CPACR_CP10_POS          (20U)          /* CPACR bits 23:20 (no CMSIS name) */
 #define HSI_CLOCK_HZ                (16000000U)    /* Default internal 16 MHz oscillator */
 

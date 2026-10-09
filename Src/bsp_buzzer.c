@@ -8,6 +8,7 @@
 #include "bsp_buzzer.h"
 #define STM32F411xE
 #include "stm32f4xx.h"
+#include "bsp_reg_fields.h"
 
 /* Named Constants (Rule 5 & Rule 10) */
 #define BUZZER_VOL_MIN_THRESH   (80U)
@@ -18,7 +19,7 @@
 #define TIM4_PRESCALER_1MHZ     (15U)      /* 16 MHz / (15 + 1) = 1 MHz (1 tick = 1 us) */
 #define BUZZER_MIN_PULSE_TICKS  (2U)
 #define BUZZER_HALF_PERIOD_DIV  (2U)       /* Max duty = 50 % */
-#define GPIO_AF2_TIM4           (2UL)      /* AF2 = TIM4_CH2 on PB7 */
+#define TIM_OC_MODE_PWM1        (0b110U)   /* OCxM: 110 = PWM mode 1 */
 
 void bsp_buzzer_init(void)
 {
@@ -28,9 +29,9 @@ void bsp_buzzer_init(void)
 
     /* --- Setup GPIO PB7: AF2 (TIM4_CH2), push-pull, very high speed, no pull --- */
     GPIOB->MODER &= ~GPIO_MODER_MODER7;
-    GPIOB->MODER |= GPIO_MODER_MODER7_1;    /* 10 = alternate function */
+    GPIOB->MODER |= (GPIO_MODE_AF << GPIO_MODER_MODER7_Pos);
     GPIOB->OTYPER &= ~GPIO_OTYPER_OT7;
-    GPIOB->OSPEEDR |= GPIO_OSPEEDR_OSPEED7;    /* 11 = very high speed */
+    GPIOB->OSPEEDR |= (GPIO_SPEED_VERY_HIGH << GPIO_OSPEEDR_OSPEED7_Pos);
     GPIOB->PUPDR &= ~GPIO_PUPDR_PUPD7;
     GPIOB->AFR[0] &= ~GPIO_AFRL_AFSEL7;
     GPIOB->AFR[0] |= (GPIO_AF2_TIM4 << GPIO_AFRL_AFSEL7_Pos);
@@ -41,7 +42,7 @@ void bsp_buzzer_init(void)
 
     /* --- Setup TIM4 CH2: PWM mode 1 with preload --- */
     TIM4->CCMR1 &= ~TIM_CCMR1_OC2M;
-    TIM4->CCMR1 |= (TIM_CCMR1_OC2M_2 | TIM_CCMR1_OC2M_1 | TIM_CCMR1_OC2PE);    /* OC2M = 110: PWM mode 1 */
+    TIM4->CCMR1 |= ((TIM_OC_MODE_PWM1 << TIM_CCMR1_OC2M_Pos) | TIM_CCMR1_OC2PE);
     TIM4->CCER |= TIM_CCER_CC2E;
 
     /* --- Start muted --- */

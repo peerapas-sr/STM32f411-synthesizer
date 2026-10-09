@@ -65,6 +65,7 @@ graph TD
 | [`Inc/bsp_buzzer.h`](file:///z:/Embedsystemtoyota/Project/Inc/bsp_buzzer.h) | BSP | APIs: `bsp_buzzer_init(void)`, `bsp_buzzer_set_tone(uint32_t u4t_freq_hz, uint16_t u2t_vol_adc)`, `bsp_buzzer_off(void)`. |
 | [`Src/bsp_uart.c`](file:///z:/Embedsystemtoyota/Project/Src/bsp_uart.c) | BSP | USART2 driver: 115200 bps, 8-N-1, 100% Interrupt-Driven RX (RXNE ring buffer) & TX (TXE ring buffer), zero CPU polling. |
 | [`Inc/bsp_uart.h`](file:///z:/Embedsystemtoyota/Project/Inc/bsp_uart.h) | BSP | APIs: `bsp_uart_init(void)`, `bsp_uart_send_string(const char *p_str)`, `bsp_uart_send_dec(uint32_t u4t_val)`, `bsp_uart_read_char(char *p_c)` (returns `false` when RX buffer is empty). |
+| [`Inc/bsp_reg_fields.h`](file:///z:/Embedsystemtoyota/Project/Inc/bsp_reg_fields.h) | BSP | Shared register field values written in binary as the Reference Manual lists them (`GPIO_MODE_OUTPUT (0b01U)`, `GPIO_PULL_UP`, `GPIO_AF7_USART2 (0b0111U)`, `DMA_PRIORITY_HIGH`, ...). Used as `REG \|= (VALUE << FIELD_Pos)`. |
 | [`STM32F411RETX_FLASH.ld`](file:///z:/Embedsystemtoyota/Project/STM32F411RETX_FLASH.ld) | Build | GNU Linker script: Flash memory (512 KB @ `0x08000000`), SRAM (128 KB @ `0x20000000`). |
 
 ---

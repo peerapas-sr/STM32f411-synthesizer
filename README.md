@@ -189,6 +189,7 @@ Example telemetry (every note uses the same format):
 │   ├── bsp_gpio.h         # GPIO pin configurations & EXTI2 interface
 │   ├── bsp_joystick.h     # HW-504 EMA filter & debounce FSM interface
 │   ├── bsp_oled.h         # OLED graphics, virtual piano & I2C DMA interface
+│   ├── bsp_reg_fields.h   # Register field values in binary (MODER, PUPDR, AF, DMA) as in RM0383
 │   ├── bsp_timer.h        # TIM3 timebase & delay utilities
 │   └── bsp_uart.h         # USART2 interrupt-driven ring buffer interface
 ├── Src/

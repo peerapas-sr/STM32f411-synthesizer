@@ -9,6 +9,7 @@
 #include "bsp_uart.h"
 #define STM32F411xE
 #include "stm32f4xx.h"
+#include "bsp_reg_fields.h"
 
 /* Named Constants (Rule 5 & Rule 10) */
 #define UART_RX_BUFFER_SIZE     (64U)
@@ -18,7 +19,6 @@
 #define UART_DEC_MAX_DIGITS     (10U)
 #define UART_DECIMAL_BASE       (10U)
 #define UART_DR_DATA_MASK       (0xFFU)    /* 8 data bits */
-#define GPIO_AF7_USART2         (7UL)      /* AF7 = USART2 on PA2 / PA3 */
 
 static volatile char     g_c_rx_buffer[UART_RX_BUFFER_SIZE];
 static volatile uint8_t  g_u1t_rx_head = 0U;
@@ -35,12 +35,12 @@ void bsp_uart_init(void)
 
     /* --- Setup GPIO PA2 (TX), PA3 (RX): AF7, very high speed, pull-up --- */
     GPIOA->MODER &= ~(GPIO_MODER_MODER2 | GPIO_MODER_MODER3);
-    GPIOA->MODER |= (GPIO_MODER_MODER2_1 | GPIO_MODER_MODER3_1);    /* 10 = alternate function */
+    GPIOA->MODER |= ((GPIO_MODE_AF << GPIO_MODER_MODER2_Pos) | (GPIO_MODE_AF << GPIO_MODER_MODER3_Pos));
     GPIOA->AFR[0] &= ~(GPIO_AFRL_AFSEL2 | GPIO_AFRL_AFSEL3);
     GPIOA->AFR[0] |= ((GPIO_AF7_USART2 << GPIO_AFRL_AFSEL2_Pos) | (GPIO_AF7_USART2 << GPIO_AFRL_AFSEL3_Pos));
-    GPIOA->OSPEEDR |= (GPIO_OSPEEDR_OSPEED2 | GPIO_OSPEEDR_OSPEED3);    /* 11 = very high speed */
+    GPIOA->OSPEEDR |= ((GPIO_SPEED_VERY_HIGH << GPIO_OSPEEDR_OSPEED2_Pos) | (GPIO_SPEED_VERY_HIGH << GPIO_OSPEEDR_OSPEED3_Pos));
     GPIOA->PUPDR &= ~(GPIO_PUPDR_PUPD2 | GPIO_PUPDR_PUPD3);
-    GPIOA->PUPDR |= (GPIO_PUPDR_PUPD2_0 | GPIO_PUPDR_PUPD3_0);    /* 01 = pull-up */
+    GPIOA->PUPDR |= ((GPIO_PULL_UP << GPIO_PUPDR_PUPD2_Pos) | (GPIO_PULL_UP << GPIO_PUPDR_PUPD3_Pos));
 
     /* --- Setup USART2: 115200 8N1, TX + RX enabled, RXNE interrupt (TXE interrupt enabled on demand) --- */
     USART2->BRR = USART2_BRR_115200;

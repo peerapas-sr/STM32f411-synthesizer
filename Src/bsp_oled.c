@@ -8,6 +8,7 @@
 #include "bsp_oled.h"
 #define STM32F411xE
 #include "stm32f4xx.h"
+#include "bsp_reg_fields.h"
 #include "bsp_timer.h"
 
 /* Named Constants (Rule 5 & Rule 10) */
@@ -16,7 +17,6 @@
 #define I2C_CTRL_BYTE_CMD           (0x00U)
 #define I2C_CTRL_BYTE_DATA          (0x40U)
 #define I2C_ERROR_FLAGS             (I2C_SR1_BERR | I2C_SR1_ARLO | I2C_SR1_AF | I2C_SR1_OVR)
-#define GPIO_AF4_I2C1               (4UL)      /* AF4 = I2C1 on PB8 / PB9 */
 #define I2C_CR2_FREQ_16MHZ          (16U)
 #define I2C_CCR_FAST_400KHZ         (14U)
 #define I2C_TRISE_FAST              (5U)
@@ -144,7 +144,7 @@ static void oled_i2c_bus_recovery(void)
     I2C1->CR1 |= I2C_CR1_SWRST;
 
     GPIOB->MODER &= ~(GPIO_MODER_MODER8 | GPIO_MODER_MODER9);
-    GPIOB->MODER |= (GPIO_MODER_MODER8_0 | GPIO_MODER_MODER9_0);    /* 01 = output (bit-bang) */
+    GPIOB->MODER |= ((GPIO_MODE_OUTPUT << GPIO_MODER_MODER8_Pos) | (GPIO_MODE_OUTPUT << GPIO_MODER_MODER9_Pos));    /* bit-bang */
     GPIOB->BSRR = (GPIO_BSRR_BS8 | GPIO_BSRR_BS9);
     bsp_delay_us(I2C_BIT_DELAY_US);
     for (uint8_t u1t_i = 0U; (u1t_i < I2C_RECOVERY_PULSES) && ((GPIOB->IDR & GPIO_IDR_ID9) == 0U); u1t_i++)
@@ -161,7 +161,7 @@ static void oled_i2c_bus_recovery(void)
     GPIOB->BSRR = GPIO_BSRR_BS9;
     bsp_delay_us(I2C_BIT_DELAY_US);
     GPIOB->MODER &= ~(GPIO_MODER_MODER8 | GPIO_MODER_MODER9);
-    GPIOB->MODER |= (GPIO_MODER_MODER8_1 | GPIO_MODER_MODER9_1);    /* 10 = alternate function */
+    GPIOB->MODER |= ((GPIO_MODE_AF << GPIO_MODER_MODER8_Pos) | (GPIO_MODE_AF << GPIO_MODER_MODER9_Pos));
 
     I2C1->CR1 &= ~I2C_CR1_SWRST;
     I2C1->CR2 = I2C_CR2_FREQ_16MHZ;
@@ -550,9 +550,9 @@ void bsp_oled_init(void)
     RCC->AHB1ENR |= (RCC_AHB1ENR_GPIOBEN | RCC_AHB1ENR_DMA1EN);
     RCC->APB1ENR |= RCC_APB1ENR_I2C1EN;
     GPIOB->OTYPER |= (GPIO_OTYPER_OT8 | GPIO_OTYPER_OT9);    /* open-drain */
-    GPIOB->OSPEEDR |= (GPIO_OSPEEDR_OSPEED8 | GPIO_OSPEEDR_OSPEED9);    /* 11 = very high speed */
+    GPIOB->OSPEEDR |= ((GPIO_SPEED_VERY_HIGH << GPIO_OSPEEDR_OSPEED8_Pos) | (GPIO_SPEED_VERY_HIGH << GPIO_OSPEEDR_OSPEED9_Pos));
     GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPD8 | GPIO_PUPDR_PUPD9);
-    GPIOB->PUPDR |= (GPIO_PUPDR_PUPD8_0 | GPIO_PUPDR_PUPD9_0);    /* 01 = pull-up */
+    GPIOB->PUPDR |= ((GPIO_PULL_UP << GPIO_PUPDR_PUPD8_Pos) | (GPIO_PULL_UP << GPIO_PUPDR_PUPD9_Pos));
     GPIOB->AFR[1] &= ~(GPIO_AFRH_AFSEL8 | GPIO_AFRH_AFSEL9);
     GPIOB->AFR[1] |= ((GPIO_AF4_I2C1 << GPIO_AFRH_AFSEL8_Pos) | (GPIO_AF4_I2C1 << GPIO_AFRH_AFSEL9_Pos));
     oled_i2c_bus_recovery();    /* Also switches PB8/PB9 to AF mode and configures I2C1 */
@@ -578,7 +578,10 @@ void bsp_oled_init(void)
     (void)oled_wait_clear(&DMA1_Stream6->CR, DMA_SxCR_EN);
     DMA1->HIFCR = DMA1_S6_ALL_FLAGS;
     DMA1_Stream6->PAR = (uint32_t)(&(I2C1->DR));
-    DMA1_Stream6->CR = (DMA_SxCR_CHSEL_0 | DMA_SxCR_PL_1 | DMA_SxCR_MINC | DMA_SxCR_DIR_0 | DMA_SxCR_TCIE);
+    DMA1_Stream6->CR = ((DMA_CHANNEL_1 << DMA_SxCR_CHSEL_Pos) |
+                        (DMA_PRIORITY_HIGH << DMA_SxCR_PL_Pos) |
+                        (DMA_DIR_MEM_TO_PERIPH << DMA_SxCR_DIR_Pos) |
+                        DMA_SxCR_MINC | DMA_SxCR_TCIE);
     DMA1_Stream6->FCR = 0U;
     NVIC_SetPriority(DMA1_Stream6_IRQn, I2C1_DMA_NVIC_PRIORITY);
     NVIC_EnableIRQ(DMA1_Stream6_IRQn);

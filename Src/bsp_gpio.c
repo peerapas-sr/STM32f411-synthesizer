@@ -8,9 +8,11 @@
 #include "bsp_gpio.h"
 #define STM32F411xE
 #include "stm32f4xx.h"
+#include "bsp_reg_fields.h"
 
 /* Named Constants (Rule 5 & Rule 10) */
 #define EXTI2_NVIC_PRIORITY     (2U)
+#define SYSCFG_EXTI_PORT_C      (0b0010U)    /* EXTICR: 0000 = PA, 0001 = PB, 0010 = PC */
 
 static volatile bool g_b_joy_sw_exti_flag = false;
 
@@ -23,35 +25,39 @@ void bsp_gpio_init(void)
     /* --- Setup GPIO PA5 (blue), PA6 (red), PA7 (yellow) LED: output push-pull, no pull, start OFF --- */
     GPIOA->BSRR = (GPIO_BSRR_BR5 | GPIO_BSRR_BR6 | GPIO_BSRR_BR7);
     GPIOA->MODER &= ~(GPIO_MODER_MODER5 | GPIO_MODER_MODER6 | GPIO_MODER_MODER7);
-    GPIOA->MODER |= (GPIO_MODER_MODER5_0 | GPIO_MODER_MODER6_0 | GPIO_MODER_MODER7_0);    /* 01 = output */
+    GPIOA->MODER |= ((GPIO_MODE_OUTPUT << GPIO_MODER_MODER5_Pos) |
+                     (GPIO_MODE_OUTPUT << GPIO_MODER_MODER6_Pos) |
+                     (GPIO_MODE_OUTPUT << GPIO_MODER_MODER7_Pos));
     GPIOA->OTYPER &= ~(GPIO_OTYPER_OT5 | GPIO_OTYPER_OT6 | GPIO_OTYPER_OT7);
     GPIOA->PUPDR &= ~(GPIO_PUPDR_PUPD5 | GPIO_PUPDR_PUPD6 | GPIO_PUPDR_PUPD7);
 
     /* --- Setup GPIO PB6 (green) LED: output push-pull, no pull, start OFF --- */
     GPIOB->BSRR = GPIO_BSRR_BR6;
     GPIOB->MODER &= ~GPIO_MODER_MODER6;
-    GPIOB->MODER |= GPIO_MODER_MODER6_0;    /* 01 = output */
+    GPIOB->MODER |= (GPIO_MODE_OUTPUT << GPIO_MODER_MODER6_Pos);
     GPIOB->OTYPER &= ~GPIO_OTYPER_OT6;
     GPIOB->PUPDR &= ~GPIO_PUPDR_PUPD6;
 
     /* --- Setup GPIO PA10 (Key 1): input, pull-up --- */
     GPIOA->MODER &= ~GPIO_MODER_MODER10;    /* 00 = input */
     GPIOA->PUPDR &= ~GPIO_PUPDR_PUPD10;
-    GPIOA->PUPDR |= GPIO_PUPDR_PUPD10_0;    /* 01 = pull-up */
+    GPIOA->PUPDR |= (GPIO_PULL_UP << GPIO_PUPDR_PUPD10_Pos);
 
     /* --- Setup GPIO PB3, PB5, PB4 (Keys 2-4): input, pull-up --- */
     GPIOB->MODER &= ~(GPIO_MODER_MODER3 | GPIO_MODER_MODER4 | GPIO_MODER_MODER5);
     GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPD3 | GPIO_PUPDR_PUPD4 | GPIO_PUPDR_PUPD5);
-    GPIOB->PUPDR |= (GPIO_PUPDR_PUPD3_0 | GPIO_PUPDR_PUPD4_0 | GPIO_PUPDR_PUPD5_0);
+    GPIOB->PUPDR |= ((GPIO_PULL_UP << GPIO_PUPDR_PUPD3_Pos) |
+                     (GPIO_PULL_UP << GPIO_PUPDR_PUPD4_Pos) |
+                     (GPIO_PULL_UP << GPIO_PUPDR_PUPD5_Pos));
 
     /* --- Setup GPIO PC2 (Joystick SW): input, pull-up --- */
     GPIOC->MODER &= ~GPIO_MODER_MODER2;
     GPIOC->PUPDR &= ~GPIO_PUPDR_PUPD2;
-    GPIOC->PUPDR |= GPIO_PUPDR_PUPD2_0;
+    GPIOC->PUPDR |= (GPIO_PULL_UP << GPIO_PUPDR_PUPD2_Pos);
 
     /* --- Setup EXTI Line 2 on PC2: both edges (falling = press, rising = release) --- */
     SYSCFG->EXTICR[0] &= ~SYSCFG_EXTICR1_EXTI2;
-    SYSCFG->EXTICR[0] |= SYSCFG_EXTICR1_EXTI2_PC;
+    SYSCFG->EXTICR[0] |= (SYSCFG_EXTI_PORT_C << SYSCFG_EXTICR1_EXTI2_Pos);
     EXTI->IMR |= EXTI_IMR_MR2;
     EXTI->FTSR |= EXTI_FTSR_TR2;
     EXTI->RTSR |= EXTI_RTSR_TR2;

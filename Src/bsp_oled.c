@@ -22,6 +22,9 @@
 #define I2C_PINS_OUTPUT_MODE        ((1UL << 16U) | (1UL << 18U))
 #define I2C_PINS_AF_MODE            ((2UL << 16U) | (2UL << 18U))
 #define I2C_PINS_PULL_UP            ((1UL << 16U) | (1UL << 18U))
+#define I2C_PINS_VERY_HIGH          ((3UL << 16U) | (3UL << 18U))    /* OSPEEDR = 11: very high speed */
+#define BSRR_RESET_SHIFT            (16U)
+#define DMA_CHANNEL_1               (1UL)      /* DMA1 Stream 6 channel 1 = I2C1_TX */
 #define I2C_PINS_AF4                ((4UL << 0U) | (4UL << 4U))
 #define I2C_PINS_AF_MASK            ((15UL << 0U) | (15UL << 4U))
 #define I2C_CR2_FREQ_16MHZ          (16U)
@@ -35,6 +38,8 @@
 #define I2C1_DMA_NVIC_PRIORITY      (2U)
 
 #define OLED_BUFFER_SIZE            (OLED_WIDTH_PX * OLED_NUM_PAGES)
+#define OLED_PAGE_HEIGHT_PX         (8U)       /* One framebuffer byte = 8 vertical pixels */
+#define OLED_ALL_PIXELS_ON          (0xFFU)
 #define OLED_DMA_PAYLOAD_LEN        (OLED_WIDTH_PX + 1U)    /* Control byte + 128 data bytes */
 #define OLED_SERVICE_SLICE_MS       (5U)
 #define OLED_DMA_TIMEOUT_MS         (15U)
@@ -70,6 +75,24 @@
 #define GAUGE_Y1                    (22U)
 #define GAUGE_CENTER_X              (64)
 #define GAUGE_HALF_TRAVEL           (20)
+#define GAUGE_LABEL_LEFT_X          (2U)
+#define GAUGE_LABEL_RIGHT_X         (96U)
+#define JOY_NORM_FULL               (1000)
+#define PERCENT_FULL                (100U)
+#define PAGE_STATUS                 (0U)       /* Mode, bank, volume */
+#define PAGE_NOTE                   (1U)       /* Note name, frequency, bend */
+#define PAGE_GAUGE                  (2U)       /* Pitch gauge labels */
+#define HDR_BANK_X                  (44U)
+#define HDR_VOL_LABEL_X             (72U)
+#define HDR_FREQ_X                  (50U)
+#define HDR_BEND_X                  (88U)
+#define VOL_BAR_Y0                  (1U)
+#define VOL_BAR_Y1                  (6U)
+#define PIANO_LABEL_X_OFFSET        (3U)
+#define PIANO_FILL_PAGE_TOP         (3U)       /* Active key fill covers rows 25..62 = pages 3..7 */
+#define PIANO_FILL_PAGE_BOT         (7U)
+#define PIANO_FILL_TOP_BITS         (0xFEU)    /* Page 3: rows 25..31 (row 24 is the border) */
+#define PIANO_FILL_BOT_BITS         (0x7FU)    /* Page 7: rows 56..62 (row 63 is the border) */
 
 /* 5x7 ASCII Font (ASCII 32..95), one column byte per entry, 4 glyphs per row */
 static const uint8_t OLED_FONT5X7[FONT_LAST_ASCII - FONT_FIRST_ASCII + 1U][FONT_WIDTH_PX] = {
@@ -99,12 +122,24 @@ static uint8_t           g_u1t_errors = 0U;
 static uint32_t          g_u4t_slice_ms = 0U;
 static uint32_t          g_u4t_keep_alive_ms = 0U;
 
-/* Wait (bounded) until any bit of mask is set (b_set) or all bits are clear (!b_set) */
-static bool oled_wait(volatile uint32_t *p_reg, uint32_t u4t_mask, bool b_set)
+/* Wait (bounded) until at least one bit of the mask is 1; returns false on timeout */
+static bool oled_wait_set(volatile uint32_t *p_reg, uint32_t u4t_mask)
 {
     uint32_t u4t_timeout = I2C_TIMEOUT_CYCLES;
 
-    while ((((*p_reg & u4t_mask) != 0U) != b_set) && (u4t_timeout > 0U))
+    while (((*p_reg & u4t_mask) == 0U) && (u4t_timeout > 0U))
+    {
+        u4t_timeout--;
+    }
+    return (u4t_timeout > 0U);
+}
+
+/* Wait (bounded) until all bits of the mask are 0; returns false on timeout */
+static bool oled_wait_clear(volatile uint32_t *p_reg, uint32_t u4t_mask)
+{
+    uint32_t u4t_timeout = I2C_TIMEOUT_CYCLES;
+
+    while (((*p_reg & u4t_mask) != 0U) && (u4t_timeout > 0U))
     {
         u4t_timeout--;
     }
@@ -123,12 +158,12 @@ static void oled_i2c_bus_recovery(void)
     bsp_delay_us(I2C_BIT_DELAY_US);
     for (uint8_t u1t_i = 0U; (u1t_i < I2C_RECOVERY_PULSES) && ((GPIOB->IDR & I2C_SDA_BIT) == 0U); u1t_i++)
     {
-        GPIOB->BSRR = (I2C_SCL_BIT << 16U);
+        GPIOB->BSRR = (I2C_SCL_BIT << BSRR_RESET_SHIFT);
         bsp_delay_us(I2C_BIT_DELAY_US);
         GPIOB->BSRR = I2C_SCL_BIT;
         bsp_delay_us(I2C_BIT_DELAY_US);
     }
-    GPIOB->BSRR = (I2C_SDA_BIT << 16U);    /* Manual STOP: SDA low -> SCL high -> SDA high */
+    GPIOB->BSRR = (I2C_SDA_BIT << BSRR_RESET_SHIFT);    /* Manual STOP: SDA low -> SCL high -> SDA high */
     bsp_delay_us(I2C_BIT_DELAY_US);
     GPIOB->BSRR = I2C_SCL_BIT;
     bsp_delay_us(I2C_BIT_DELAY_US);
@@ -147,13 +182,17 @@ static void oled_i2c_bus_recovery(void)
 /* START + slave address; recovers the bus if it is stuck busy */
 static bool oled_i2c_start(void)
 {
-    bool b_ok = oled_wait(&I2C1->SR2, I2C_SR2_BUSY, false);
+    bool b_ok = oled_wait_clear(&I2C1->SR2, I2C_SR2_BUSY);
 
     if (b_ok == true)
     {
         I2C1->SR1 &= ~I2C_ERROR_FLAGS;
         I2C1->CR1 |= I2C_CR1_START;
-        b_ok = oled_wait(&I2C1->SR1, I2C_SR1_SB, true);
+        b_ok = oled_wait_set(&I2C1->SR1, I2C_SR1_SB);
+    }
+    else
+    {
+        /* No action required */
     }
 
     if (b_ok == false)
@@ -163,7 +202,7 @@ static bool oled_i2c_start(void)
     else
     {
         I2C1->DR = I2C_OLED_ADDR_WRITE;
-        (void)oled_wait(&I2C1->SR1, (I2C_SR1_ADDR | I2C_SR1_AF), true);
+        (void)oled_wait_set(&I2C1->SR1, (I2C_SR1_ADDR | I2C_SR1_AF));
         if ((I2C1->SR1 & I2C_SR1_ADDR) != 0U)
         {
             (void)I2C1->SR2;    /* SR1 then SR2 read clears ADDR */
@@ -181,9 +220,9 @@ static bool oled_i2c_start(void)
 /* Wait for last byte (BTF) or an error, then STOP and clear error flags */
 static void oled_i2c_stop(void)
 {
-    (void)oled_wait(&I2C1->SR1, (I2C_SR1_BTF | I2C_SR1_AF | I2C_SR1_BERR), true);
+    (void)oled_wait_set(&I2C1->SR1, (I2C_SR1_BTF | I2C_SR1_AF | I2C_SR1_BERR));
     I2C1->CR1 |= I2C_CR1_STOP;
-    (void)oled_wait(&I2C1->CR1, I2C_CR1_STOP, false);
+    (void)oled_wait_clear(&I2C1->CR1, I2C_CR1_STOP);
     I2C1->SR1 &= ~I2C_ERROR_FLAGS;
 }
 
@@ -197,11 +236,15 @@ static bool oled_send(uint8_t u1t_ctrl, const uint8_t *p_bytes, uint8_t u1t_len)
         I2C1->DR = u1t_ctrl;
         for (uint8_t u1t_i = 0U; u1t_i < u1t_len; u1t_i++)
         {
-            (void)oled_wait(&I2C1->SR1, I2C_SR1_TXE, true);
+            (void)oled_wait_set(&I2C1->SR1, I2C_SR1_TXE);
             I2C1->DR = p_bytes[u1t_i];
         }
         oled_i2c_stop();
         bsp_delay_us(I2C_IDLE_DELAY_US);
+    }
+    else
+    {
+        /* No action required */
     }
     return b_ok;
 }
@@ -225,11 +268,15 @@ static bool oled_write_page_dma(uint8_t u1t_page)
             g_u1t_dma_buf[u2t_col + 1U] = g_u1t_frame[((uint16_t)u1t_page * OLED_WIDTH_PX) + u2t_col];
         }
         DMA1_Stream6->CR &= ~DMA_SxCR_EN;
-        (void)oled_wait(&DMA1_Stream6->CR, DMA_SxCR_EN, false);
+        (void)oled_wait_clear(&DMA1_Stream6->CR, DMA_SxCR_EN);
         DMA1->HIFCR = DMA1_S6_ALL_FLAGS;
         DMA1_Stream6->M0AR = (uint32_t)g_u1t_dma_buf;
         DMA1_Stream6->NDTR = OLED_DMA_PAYLOAD_LEN;
         b_ok = oled_i2c_start();
+    }
+    else
+    {
+        /* No action required */
     }
 
     if (b_ok == true)
@@ -237,6 +284,10 @@ static bool oled_write_page_dma(uint8_t u1t_page)
         g_b_dma_busy = true;
         I2C1->CR2 |= I2C_CR2_DMAEN;
         DMA1_Stream6->CR |= DMA_SxCR_EN;
+    }
+    else
+    {
+        /* No action required */
     }
     return b_ok;
 }
@@ -267,6 +318,10 @@ void bsp_oled_service(uint32_t u4t_now)
         {
             oled_i2c_bus_recovery();    /* DMA transfer stalled */
         }
+        else
+        {
+            /* No action required */
+        }
     }
     else if ((u4t_now - g_u4t_slice_ms) >= OLED_SERVICE_SLICE_MS)
     {
@@ -275,6 +330,10 @@ void bsp_oled_service(uint32_t u4t_now)
         {
             g_u4t_keep_alive_ms = u4t_now;
             oled_wake_display();
+        }
+        else
+        {
+            /* No action required */
         }
 
         if (oled_write_page_dma(g_u1t_page) == true)
@@ -291,6 +350,10 @@ void bsp_oled_service(uint32_t u4t_now)
                 oled_i2c_bus_recovery();
                 oled_wake_display();
             }
+            else
+            {
+                /* No action required */
+            }
         }
     }
     else
@@ -304,7 +367,7 @@ void bsp_oled_clear_buffer(void)
 {
     for (uint16_t u2t_i = 0U; u2t_i < OLED_BUFFER_SIZE; u2t_i++)
     {
-        g_u1t_frame[u2t_i] = 0x00U;
+        g_u1t_frame[u2t_i] = 0U;
     }
 }
 
@@ -313,10 +376,10 @@ static void oled_fill_rect(uint8_t u1t_x0, uint8_t u1t_y0, uint8_t u1t_x1, uint8
 {
     for (uint8_t u1t_y = u1t_y0; u1t_y <= u1t_y1; u1t_y++)
     {
-        uint8_t u1t_bit = (uint8_t)(1U << (u1t_y % 8U));
+        uint8_t u1t_bit = (uint8_t)(1U << (u1t_y % OLED_PAGE_HEIGHT_PX));
         for (uint8_t u1t_x = u1t_x0; u1t_x <= u1t_x1; u1t_x++)
         {
-            uint16_t u2t_idx = ((uint16_t)(u1t_y / 8U) * OLED_WIDTH_PX) + u1t_x;
+            uint16_t u2t_idx = ((uint16_t)(u1t_y / OLED_PAGE_HEIGHT_PX) * OLED_WIDTH_PX) + u1t_x;
             if (b_color == true)
             {
                 g_u1t_frame[u2t_idx] |= u1t_bit;
@@ -341,13 +404,7 @@ static void oled_draw_box(uint8_t u1t_x0, uint8_t u1t_y0, uint8_t u1t_x1, uint8_
 static void oled_draw_string(uint8_t u1t_x, uint8_t u1t_page, const char *p_str, bool b_invert)
 {
     uint8_t u1t_cx = u1t_x;
-    uint8_t u1t_xor = 0x00U;
     const char *p_ch = p_str;
-
-    if (b_invert == true)
-    {
-        u1t_xor = 0xFFU;
-    }
 
     while ((*p_ch != '\0') && (u1t_cx <= (OLED_WIDTH_PX - FONT_CELL_PX)))
     {
@@ -356,14 +413,30 @@ static void oled_draw_string(uint8_t u1t_x, uint8_t u1t_page, const char *p_str,
         {
             u1t_c -= ASCII_CASE_OFFSET;
         }
+        else
+        {
+            /* No action required */
+        }
         for (uint8_t u1t_col = 0U; u1t_col < FONT_CELL_PX; u1t_col++)
         {
-            uint8_t u1t_bits = 0x00U;
+            uint8_t u1t_bits = 0U;
             if ((u1t_col < FONT_WIDTH_PX) && (u1t_c >= FONT_FIRST_ASCII) && (u1t_c <= FONT_LAST_ASCII))
             {
                 u1t_bits = OLED_FONT5X7[u1t_c - FONT_FIRST_ASCII][u1t_col];
             }
-            g_u1t_frame[((uint16_t)u1t_page * OLED_WIDTH_PX) + u1t_cx + u1t_col] = (uint8_t)(u1t_bits ^ u1t_xor);
+            else
+            {
+                /* No action required */
+            }
+            if (b_invert == true)
+            {
+                u1t_bits = (uint8_t)(~u1t_bits);    /* White text on black for the active key label */
+            }
+            else
+            {
+                /* No action required */
+            }
+            g_u1t_frame[((uint16_t)u1t_page * OLED_WIDTH_PX) + u1t_cx + u1t_col] = u1t_bits;
         }
         u1t_cx += FONT_CELL_PX;
         p_ch++;
@@ -374,13 +447,17 @@ static void oled_draw_string(uint8_t u1t_x, uint8_t u1t_page, const char *p_str,
 void bsp_oled_render_header(const char *p_mode, bool b_high_bank, uint8_t u1t_vol_pct,
                             const char *p_note_name, const char *p_note_freq, int32_t s4t_cents)
 {
-    uint8_t u1t_fill = (uint8_t)(((uint32_t)u1t_vol_pct * VOL_BAR_MAX_LEN) / 100U);
+    uint8_t u1t_fill = (uint8_t)(((uint32_t)u1t_vol_pct * VOL_BAR_MAX_LEN) / PERCENT_FULL);
     const char *p_bank = "[LO]";
     const char *p_bend = "P: 0";
 
     if (b_high_bank == true)
     {
         p_bank = "[HI]";
+    }
+    else
+    {
+        /* No action required */
     }
     if (s4t_cents > 0)
     {
@@ -396,26 +473,30 @@ void bsp_oled_render_header(const char *p_mode, bool b_high_bank, uint8_t u1t_vo
     }
 
     /* Page 0: mode, bank, volume bar | Page 1: note name, frequency, bend direction */
-    oled_draw_string(0U, 0U, p_mode, false);
-    oled_draw_string(44U, 0U, p_bank, false);
-    oled_draw_string(72U, 0U, "VOL:", false);
-    oled_draw_box(VOL_BAR_X0, 1U, VOL_BAR_X1, 6U);
+    oled_draw_string(0U, PAGE_STATUS, p_mode, false);
+    oled_draw_string(HDR_BANK_X, PAGE_STATUS, p_bank, false);
+    oled_draw_string(HDR_VOL_LABEL_X, PAGE_STATUS, "VOL:", false);
+    oled_draw_box(VOL_BAR_X0, VOL_BAR_Y0, VOL_BAR_X1, VOL_BAR_Y1);
     if (u1t_fill > 0U)
     {
-        oled_fill_rect(VOL_BAR_X0 + 1U, 2U, (uint8_t)(VOL_BAR_X0 + 1U + u1t_fill), 5U, true);
+        oled_fill_rect(VOL_BAR_X0 + 1U, VOL_BAR_Y0 + 1U, (uint8_t)(VOL_BAR_X0 + 1U + u1t_fill), VOL_BAR_Y1 - 1U, true);
     }
-    oled_draw_string(0U, 1U, p_note_name, false);
-    oled_draw_string(50U, 1U, p_note_freq, false);
-    oled_draw_string(88U, 1U, p_bend, false);
+    else
+    {
+        /* No action required */
+    }
+    oled_draw_string(0U, PAGE_NOTE, p_note_name, false);
+    oled_draw_string(HDR_FREQ_X, PAGE_NOTE, p_note_freq, false);
+    oled_draw_string(HDR_BEND_X, PAGE_NOTE, p_bend, false);
 }
 
 void bsp_oled_render_pitch_gauge(int32_t s4t_norm_x)
 {
-    int32_t s4t_dot_x = GAUGE_CENTER_X + ((s4t_norm_x * GAUGE_HALF_TRAVEL) / 1000);    /* 44..84 */
+    int32_t s4t_dot_x = GAUGE_CENTER_X + ((s4t_norm_x * GAUGE_HALF_TRAVEL) / JOY_NORM_FULL);    /* 44..84 */
 
     oled_fill_rect(0U, GAUGE_SEP_Y, OLED_WIDTH_PX - 1U, GAUGE_SEP_Y, true);
-    oled_draw_string(2U, 2U, "PITCH", false);
-    oled_draw_string(96U, 2U, "ROLL", false);
+    oled_draw_string(GAUGE_LABEL_LEFT_X, PAGE_GAUGE, "PITCH", false);
+    oled_draw_string(GAUGE_LABEL_RIGHT_X, PAGE_GAUGE, "ROLL", false);
     oled_draw_box(GAUGE_X0, GAUGE_Y0, GAUGE_X1, GAUGE_Y1);
     oled_fill_rect((uint8_t)GAUGE_CENTER_X, GAUGE_Y0 + 1U, (uint8_t)GAUGE_CENTER_X, GAUGE_Y1 - 1U, true);
     oled_fill_rect((uint8_t)(s4t_dot_x - 1), GAUGE_Y0 + 1U, (uint8_t)(s4t_dot_x + 1), GAUGE_Y1 - 1U, true);
@@ -437,17 +518,22 @@ void bsp_oled_render_piano_keyboard(int8_t s1t_active_key, const char * const pp
         oled_fill_rect(u1t_x1, PIANO_TOP_Y, u1t_x1, PIANO_BOT_Y, true);
         if (b_active == true)
         {
-            /* Page-byte stride fill of rows 25..62 (pages 3..7): 5 byte writes per column */
+            /* Page-byte stride fill: write whole bytes (8 rows each) instead of single pixels */
             for (uint8_t u1t_col = u1t_x0 + 1U; u1t_col < u1t_x1; u1t_col++)
             {
-                g_u1t_frame[(3U * OLED_WIDTH_PX) + u1t_col] |= 0xFEU;
-                g_u1t_frame[(4U * OLED_WIDTH_PX) + u1t_col] = 0xFFU;
-                g_u1t_frame[(5U * OLED_WIDTH_PX) + u1t_col] = 0xFFU;
-                g_u1t_frame[(6U * OLED_WIDTH_PX) + u1t_col] = 0xFFU;
-                g_u1t_frame[(7U * OLED_WIDTH_PX) + u1t_col] |= 0x7FU;
+                g_u1t_frame[(PIANO_FILL_PAGE_TOP * OLED_WIDTH_PX) + u1t_col] |= PIANO_FILL_TOP_BITS;
+                for (uint8_t u1t_page = PIANO_FILL_PAGE_TOP + 1U; u1t_page < PIANO_FILL_PAGE_BOT; u1t_page++)
+                {
+                    g_u1t_frame[((uint16_t)u1t_page * OLED_WIDTH_PX) + u1t_col] = OLED_ALL_PIXELS_ON;
+                }
+                g_u1t_frame[(PIANO_FILL_PAGE_BOT * OLED_WIDTH_PX) + u1t_col] |= PIANO_FILL_BOT_BITS;
             }
         }
-        oled_draw_string(u1t_x0 + 3U, PIANO_LABEL_PAGE, pp_labels[u1t_k], b_active);
+        else
+        {
+            /* No action required */
+        }
+        oled_draw_string(u1t_x0 + PIANO_LABEL_X_OFFSET, PIANO_LABEL_PAGE, pp_labels[u1t_k], b_active);
     }
 
     /* Black keys (C#, D#, F#, G#, A#): filled block with cleared outline columns */
@@ -472,7 +558,7 @@ void bsp_oled_init(void)
     RCC->AHB1ENR |= (RCC_AHB1ENR_GPIOBEN | RCC_AHB1ENR_DMA1EN);
     RCC->APB1ENR |= RCC_APB1ENR_I2C1EN;
     GPIOB->OTYPER |= (I2C_SCL_BIT | I2C_SDA_BIT);
-    GPIOB->OSPEEDR |= I2C_PINS_2BIT_MASK;
+    GPIOB->OSPEEDR |= I2C_PINS_VERY_HIGH;
     GPIOB->PUPDR = (GPIOB->PUPDR & ~I2C_PINS_2BIT_MASK) | I2C_PINS_PULL_UP;
     GPIOB->AFR[1] = (GPIOB->AFR[1] & ~I2C_PINS_AF_MASK) | I2C_PINS_AF4;
     oled_i2c_bus_recovery();    /* Also switches PB8/PB9 to AF mode and configures I2C1 */
@@ -487,14 +573,18 @@ void bsp_oled_init(void)
         {
             (void)oled_send(I2C_CTRL_BYTE_DATA, &g_u1t_frame[(uint16_t)u1t_p * OLED_WIDTH_PX], (uint8_t)OLED_WIDTH_PX);
         }
+        else
+        {
+            /* No action required */
+        }
     }
 
     /* DMA1 Stream 6 Channel 1 (I2C1_TX): memory-to-peripheral, byte size, memory increment, TC interrupt */
     DMA1_Stream6->CR = 0U;
-    (void)oled_wait(&DMA1_Stream6->CR, DMA_SxCR_EN, false);
+    (void)oled_wait_clear(&DMA1_Stream6->CR, DMA_SxCR_EN);
     DMA1->HIFCR = DMA1_S6_ALL_FLAGS;
     DMA1_Stream6->PAR = (uint32_t)(&(I2C1->DR));
-    DMA1_Stream6->CR = ((1UL << DMA_SxCR_CHSEL_Pos) | DMA_SxCR_PL_1 | DMA_SxCR_MINC | DMA_SxCR_DIR_0 | DMA_SxCR_TCIE);
+    DMA1_Stream6->CR = ((DMA_CHANNEL_1 << DMA_SxCR_CHSEL_Pos) | DMA_SxCR_PL_1 | DMA_SxCR_MINC | DMA_SxCR_DIR_0 | DMA_SxCR_TCIE);
     DMA1_Stream6->FCR = 0U;
     NVIC_SetPriority(DMA1_Stream6_IRQn, I2C1_DMA_NVIC_PRIORITY);
     NVIC_EnableIRQ(DMA1_Stream6_IRQn);

@@ -14,6 +14,7 @@
 #define TIM3_ARR_1MS            (999U)
 #define TIM3_NVIC_PRIORITY      (3U)
 #define DELAY_US_CALIB_COUNT    (1U)
+#define TIM_MMS_UPDATE_TRGO     (2UL)      /* MMS = 010: update event drives TRGO */
 
 /* Global millisecond tick counter updated by TIM3 Interrupt */
 static volatile uint32_t g_u4t_system_ms = 0U;
@@ -32,7 +33,7 @@ void bsp_timer_init(void)
 
     /* 3. Configure Master Output Trigger (TRGO on Update Event for ADC Sampling) */
     TIM3->CR2 &= ~TIM_CR2_MMS;
-    TIM3->CR2 |= (2UL << TIM_CR2_MMS_Pos);
+    TIM3->CR2 |= (TIM_MMS_UPDATE_TRGO << TIM_CR2_MMS_Pos);
 
     /* 4. Enable Update Interrupt */
     TIM3->DIER |= TIM_DIER_UIE;
@@ -50,7 +51,7 @@ uint32_t bsp_timer_get_ms(void)
     return g_u4t_system_ms;
 }
 
-/* Precise Software Delay Loops (Rule 11 & Rule 16) */
+/* Short busy-wait delay (approximate, not calibrated); used only for I2C bus-recovery bit timing */
 void bsp_delay_us(uint32_t u4t_us)
 {
     uint32_t u4t_us_rem = u4t_us;
@@ -82,5 +83,9 @@ void TIM3_IRQHandler(void)
     {
         TIM3->SR &= ~TIM_SR_UIF; /* Clear interrupt flag */
         g_u4t_system_ms++;
+    }
+    else
+    {
+        /* No action required */
     }
 }

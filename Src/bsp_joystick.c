@@ -95,6 +95,10 @@ void bsp_joystick_service(uint32_t u4t_now)
         g_b_sw_long_fired = true;
         g_sw_event = JOY_SW_EVT_LONG_PRESS;
     }
+    else
+    {
+        /* No action required */
+    }
 }
 
 int32_t bsp_joystick_get_norm_x(void)

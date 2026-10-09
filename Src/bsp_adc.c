@@ -21,11 +21,19 @@
 #define ADC_VOL_MUTE_THRESHOLD      (80U)
 #define ADC_MAX_VALUE               (4095U)
 #define PERCENT_MAX                 (100U)
-#define PA4_ANALOG                  (3UL << 8U)
-#define PC0_PC1_ANALOG              ((3UL << 0U) | (3UL << 2U))
+#define ADC_MID_SCALE               (2048U)    /* Joystick center before the first conversion */
+#define ADC_SMPR2_CH4_POS           (12U)      /* SMPR2 bits 14:12 = channel 4 */
+#define ADC_SMPR1_CH10_POS          (0U)       /* SMPR1 bits 2:0   = channel 10 */
+#define ADC_SMPR1_CH11_POS          (3U)       /* SMPR1 bits 5:3   = channel 11 */
+#define ADC_SQR3_RANK2_POS          (5U)
+#define ADC_SQR3_RANK3_POS          (10U)
+#define PA4_2BIT_MASK               (3UL << 8U)
+#define PA4_MODE_ANALOG             (3UL << 8U)                     /* MODER = 11: analog */
+#define PC0_PC1_2BIT_MASK           ((3UL << 0U) | (3UL << 2U))
+#define PC0_PC1_MODE_ANALOG         ((3UL << 0U) | (3UL << 2U))
 
 /* Filled continuously by DMA2 Stream 0 (index order = ADC scan order) */
-static volatile uint16_t g_u2t_adc_dma_buffer[ADC_NUM_CHANNELS] = {2048U, 2048U, 2048U};
+static volatile uint16_t g_u2t_adc_dma_buffer[ADC_NUM_CHANNELS] = {ADC_MID_SCALE, ADC_MID_SCALE, ADC_MID_SCALE};
 
 void bsp_adc_init(void)
 {
@@ -33,10 +41,10 @@ void bsp_adc_init(void)
     RCC->APB2ENR |= RCC_APB2ENR_ADC1EN;
 
     /* PA4, PC0, PC1: analog mode, no pull */
-    GPIOA->MODER |= PA4_ANALOG;
-    GPIOA->PUPDR &= ~PA4_ANALOG;
-    GPIOC->MODER |= PC0_PC1_ANALOG;
-    GPIOC->PUPDR &= ~PC0_PC1_ANALOG;
+    GPIOA->MODER |= PA4_MODE_ANALOG;
+    GPIOA->PUPDR &= ~PA4_2BIT_MASK;
+    GPIOC->MODER |= PC0_PC1_MODE_ANALOG;
+    GPIOC->PUPDR &= ~PC0_PC1_2BIT_MASK;
 
     /* DMA2 Stream 0 Channel 0: ADC1->DR to buffer, 16-bit, memory increment, circular */
     DMA2_Stream0->CR = 0U;    /* Stream is idle after reset: configure directly */
@@ -50,10 +58,10 @@ void bsp_adc_init(void)
 
     /* ADC1: PCLK2/4, 480-cycle sampling, scan CH4 -> CH10 -> CH11, TIM3 TRGO rising edge, DMA continuous */
     ADC->CCR = (ADC->CCR & ~ADC_CCR_ADCPRE) | ADC_CCR_ADCPRE_0;
-    ADC1->SMPR2 |= (ADC_SMP_480_CYCLES << (ADC_CH4_PA4 * 3UL));
-    ADC1->SMPR1 |= ((ADC_SMP_480_CYCLES << 0U) | (ADC_SMP_480_CYCLES << 3U));
+    ADC1->SMPR2 |= (ADC_SMP_480_CYCLES << ADC_SMPR2_CH4_POS);
+    ADC1->SMPR1 |= ((ADC_SMP_480_CYCLES << ADC_SMPR1_CH10_POS) | (ADC_SMP_480_CYCLES << ADC_SMPR1_CH11_POS));
     ADC1->SQR1 = ((ADC_NUM_CHANNELS - 1UL) << ADC_SQR1_L_Pos);
-    ADC1->SQR3 = (ADC_CH4_PA4 | (ADC_CH10_PC0 << 5U) | (ADC_CH11_PC1 << 10U));
+    ADC1->SQR3 = (ADC_CH4_PA4 | (ADC_CH10_PC0 << ADC_SQR3_RANK2_POS) | (ADC_CH11_PC1 << ADC_SQR3_RANK3_POS));
     ADC1->CR1 |= ADC_CR1_SCAN;
     ADC1->CR2 = ((ADC_EXTSEL_TIM3_TRGO << ADC_CR2_EXTSEL_Pos) | (ADC_EXTEN_RISING << ADC_CR2_EXTEN_Pos) |
                  ADC_CR2_DMA | ADC_CR2_DDS | ADC_CR2_ADON);
@@ -68,6 +76,10 @@ uint16_t bsp_adc_get_raw(uint8_t u1t_idx)
     {
         u2t_val = g_u2t_adc_dma_buffer[u1t_idx];
     }
+    else
+    {
+        /* No action required */
+    }
     return u2t_val;
 }
 
@@ -80,6 +92,10 @@ uint8_t bsp_adc_get_volume_percent(void)
     if (u4t_val > ADC_VOL_MUTE_THRESHOLD)
     {
         u4t_pct = ((u4t_val - ADC_VOL_MUTE_THRESHOLD) * PERCENT_MAX) / (ADC_MAX_VALUE - ADC_VOL_MUTE_THRESHOLD);
+    }
+    else
+    {
+        /* No action required */
     }
     return (uint8_t)u4t_pct;
 }

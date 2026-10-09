@@ -265,5 +265,6 @@ All application and BSP sources follow the **22 Toyota Embedded MISRA-C rules**,
 - **Strict Brace Discipline**: Opening and closing braces on their own separate lines.
 - **Named Constants**: Pins, timings, register values and limits use `#define` with typed suffixes (`U`, `UL`); all unsigned literals carry a `U`/`UL` suffix.
 - **No Ternary Operator**: The `? :` construct is completely banned in favor of explicit `if / else`.
-- **Complete Branch Coverage**: All `if ... else if` chains terminate with an explicit `else` block (the code uses no `switch` statements).
+- **Complete Branch Coverage**: Every `if` (including a single `if`) ends with an explicit `else` block (the code uses no `switch` statements).
+- **No Unreachable Code**: No dead branches or statements after a non-returning call.
 - **Strict Hungarian Notation**: Variables prefixed by type (`u1t_`, `u2t_`, `u4t_`, `s1t_`, `s2t_`, `s4t_`, `b_`, `c_`, `g_`, `p_`).

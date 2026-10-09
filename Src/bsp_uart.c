@@ -16,7 +16,10 @@
 #define USART2_BRR_115200       (139U)     /* 16 MHz / 115200 */
 #define USART2_NVIC_PRIORITY    (2U)
 #define UART_DEC_MAX_DIGITS     (10U)
-#define UART_PINS_MODE_MASK     ((3UL << 4U) | (3UL << 6U))      /* PA2, PA3 */
+#define UART_DECIMAL_BASE       (10U)
+#define UART_DR_DATA_MASK       (0xFFU)    /* 8 data bits */
+#define UART_PINS_2BIT_MASK     ((3UL << 4U) | (3UL << 6U))      /* PA2, PA3 2-bit config fields */
+#define UART_PINS_VERY_HIGH     ((3UL << 4U) | (3UL << 6U))      /* OSPEEDR = 11: very high speed */
 #define UART_PINS_AF_MODE       ((2UL << 4U) | (2UL << 6U))
 #define UART_PINS_PULL_UP       ((1UL << 4U) | (1UL << 6U))
 #define UART_PINS_AF_MASK       ((0xFUL << 8U) | (0xFUL << 12U))
@@ -35,10 +38,10 @@ void bsp_uart_init(void)
     RCC->APB1ENR |= RCC_APB1ENR_USART2EN;
 
     /* PA2 (TX) / PA3 (RX): AF7, high speed, pull-up */
-    GPIOA->MODER = (GPIOA->MODER & ~UART_PINS_MODE_MASK) | UART_PINS_AF_MODE;
+    GPIOA->MODER = (GPIOA->MODER & ~UART_PINS_2BIT_MASK) | UART_PINS_AF_MODE;
     GPIOA->AFR[0] = (GPIOA->AFR[0] & ~UART_PINS_AF_MASK) | UART_PINS_AF7;
-    GPIOA->OSPEEDR |= UART_PINS_MODE_MASK;
-    GPIOA->PUPDR = (GPIOA->PUPDR & ~UART_PINS_MODE_MASK) | UART_PINS_PULL_UP;
+    GPIOA->OSPEEDR |= UART_PINS_VERY_HIGH;
+    GPIOA->PUPDR = (GPIOA->PUPDR & ~UART_PINS_2BIT_MASK) | UART_PINS_PULL_UP;
 
     /* 115200 8N1, TX + RX enabled, RXNE interrupt (TXE interrupt enabled on demand) */
     USART2->BRR = USART2_BRR_115200;
@@ -57,6 +60,10 @@ static void uart_send_char(char c_val)
         g_c_tx_buffer[g_u2t_tx_head] = c_val;
         g_u2t_tx_head = u2t_next;
         USART2->CR1 |= USART_CR1_TXEIE;
+    }
+    else
+    {
+        /* No action required */
     }
 }
 
@@ -82,10 +89,14 @@ void bsp_uart_send_dec(uint32_t u4t_val)
     {
         uart_send_char('0');
     }
+    else
+    {
+        /* No action required */
+    }
     while (u4t_rem > 0U)
     {
-        c_buf[u1t_len] = (char)('0' + (u4t_rem % 10U));
-        u4t_rem /= 10U;
+        c_buf[u1t_len] = (char)('0' + (u4t_rem % UART_DECIMAL_BASE));
+        u4t_rem /= UART_DECIMAL_BASE;
         u1t_len++;
     }
     while (u1t_len > 0U)
@@ -105,6 +116,10 @@ bool bsp_uart_read_char(char *p_c)
         *p_c = g_c_rx_buffer[g_u1t_rx_tail];
         g_u1t_rx_tail = (uint8_t)((g_u1t_rx_tail + 1U) % UART_RX_BUFFER_SIZE);
     }
+    else
+    {
+        /* No action required */
+    }
     return b_have;
 }
 
@@ -113,13 +128,21 @@ void USART2_IRQHandler(void)
 {
     if ((USART2->SR & USART_SR_RXNE) != 0U)
     {
-        char c_rx = (char)(USART2->DR & 0xFFU);
+        char c_rx = (char)(USART2->DR & UART_DR_DATA_MASK);
         uint8_t u1t_next = (uint8_t)((g_u1t_rx_head + 1U) % UART_RX_BUFFER_SIZE);
         if (u1t_next != g_u1t_rx_tail)
         {
             g_c_rx_buffer[g_u1t_rx_head] = c_rx;
             g_u1t_rx_head = u1t_next;
         }
+        else
+        {
+            /* No action required */
+        }
+    }
+    else
+    {
+        /* No action required */
     }
 
     if (((USART2->SR & USART_SR_TXE) != 0U) && ((USART2->CR1 & USART_CR1_TXEIE) != 0U))
@@ -133,5 +156,9 @@ void USART2_IRQHandler(void)
         {
             USART2->CR1 &= ~USART_CR1_TXEIE;
         }
+    }
+    else
+    {
+        /* No action required */
     }
 }

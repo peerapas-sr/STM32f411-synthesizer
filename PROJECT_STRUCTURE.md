@@ -51,7 +51,7 @@ graph TD
 | [`Src/main.c`](file:///z:/Embedsystemtoyota/Project/Src/main.c) | Core | Entry point: enables Cortex-M4 hardware FPU coprocessor (`SCB->CPACR`), initializes all BSP modules, and executes the synthesizer application super-loop. |
 | [`Src/app_synth.c`](file:///z:/Embedsystemtoyota/Project/Src/app_synth.c) | App | Synthesizer state machine: Note frequency tables (Octave 7-8), 64-step sequencer, note release sustain engine (150 ms decay tail), pitch bend + vibrato (Q12 ratio table), UART command parsing and telemetry, 4-key debounce, key combos (K1+K4 Record, K2+K3 Playback). |
 | [`Inc/app_synth.h`](file:///z:/Embedsystemtoyota/Project/Inc/app_synth.h) | App | Public APIs: `app_synth_init(void)` and `app_synth_run(void)`. |
-| [`Src/bsp_oled.c`](file:///z:/Embedsystemtoyota/Project/Src/bsp_oled.c) | BSP | 1.30" OLED (SH1106 / SSD1306) driver: 1024-byte framebuffer, 5x7 font, virtual piano UI, DMA1 Stream 6 transfer, bounded I2C waits (`oled_wait`), 9-clock I2C bus recovery, 15 ms DMA stall watchdog, 3-error auto recovery, and 2000 ms keep-alive. Drawing primitives are file-private. |
+| [`Src/bsp_oled.c`](file:///z:/Embedsystemtoyota/Project/Src/bsp_oled.c) | BSP | 1.30" OLED (SH1106 / SSD1306) driver: 1024-byte framebuffer, 5x7 font, virtual piano UI, DMA1 Stream 6 transfer, bounded I2C waits (`oled_wait_set` / `oled_wait_clear`), 9-clock I2C bus recovery, 15 ms DMA stall watchdog, 3-error auto recovery, and 2000 ms keep-alive. Drawing primitives are file-private. |
 | [`Inc/bsp_oled.h`](file:///z:/Embedsystemtoyota/Project/Inc/bsp_oled.h) | BSP | APIs: `bsp_oled_init(void)`, `bsp_oled_service(uint32_t u4t_now)`, `bsp_oled_clear_buffer(void)`, `bsp_oled_render_piano_keyboard()`, `bsp_oled_render_header()`, `bsp_oled_render_pitch_gauge()`. |
 | [`Src/bsp_adc.c`](file:///z:/Embedsystemtoyota/Project/Src/bsp_adc.c) | BSP | ADC1 3-channel scan (PA4 Volume, PC0 VRx, PC1 VRy) triggered by TIM3 TRGO via DMA2 Stream 0 circular buffer (zero CPU polling). |
 | [`Inc/bsp_adc.h`](file:///z:/Embedsystemtoyota/Project/Inc/bsp_adc.h) | BSP | APIs: `bsp_adc_init(void)`, `bsp_adc_get_raw(uint8_t u1t_idx)` with `ADC_IDX_VOLUME` / `ADC_IDX_JOY_X` / `ADC_IDX_JOY_Y`, `bsp_adc_get_volume_percent(void)`. |
@@ -106,7 +106,7 @@ graph TD
   - Generates a manual bit-banged STOP condition on SDA/SCL.
   - Issues software reset via `I2C1->CR1 |= I2C_CR1_SWRST`, restores AF4 pin muxing, re-initializes CCR/TRISE registers, and flushes DMA status flags.
 - **Bounded Waits & STOP Handshake**:
-  - Every I2C/DMA flag wait goes through `oled_wait()` with a 10000-cycle timeout (`I2C_TIMEOUT_CYCLES`); START waits for `BUSY` to clear, STOP waits for `I2C_CR1_STOP` to clear.
+  - Every I2C/DMA flag wait goes through `oled_wait_set()` / `oled_wait_clear()` with a 10000-cycle timeout (`I2C_TIMEOUT_CYCLES`); START waits for `BUSY` to clear, STOP waits for `I2C_CR1_STOP` to clear.
   - Inserts a 5 µs idle guard delay (`I2C_IDLE_DELAY_US`) between consecutive transactions to satisfy I2C bus free time specifications ($t_{\text{BUF}}$).
 - **DMA Interrupt Service Routine (`DMA1_Stream6_IRQHandler`)**:
   - Clears `CTCIF6` transfer complete flag.
@@ -203,7 +203,7 @@ All source code strictly complies with the 22 Toyota Embedded MISRA-C rules:
 10. **Initialization**: All automatic local variables must be initialized at their declaration.
 11. **Control Flow Rules**:
     - Every `if`, `else`, `while`, and `for` body must be enclosed in braces `{ ... }`.
-    - Every `if ... else if` chain must terminate with an explicit `else` branch (containing `/* No action */` if empty).
+    - Every `if` (single `if` and `if ... else if` chains) must terminate with an explicit `else` branch (containing `/* No action required */` if empty).
     - Every non-empty `switch` `case` must terminate with an unconditional `break`.
     - Every `switch` statement must feature a mandatory `default:` clause positioned at the top or bottom.
 12. **Hungarian Notation**:
@@ -242,7 +242,7 @@ All source code strictly complies with the 22 Toyota Embedded MISRA-C rules:
 
 When modifying or refactoring this codebase, any AI agent must adhere to the following rules:
 1. **Never introduce `//` single-line comments**; always use `/* comment */`.
-2. **Never leave an `if ... else if` without a closing `else` branch**.
+2. **Never leave any `if` without a closing `else` branch** (Toyota Rule 19 as defined in the course skill file).
 3. **Always apply Hungarian notation** to all newly declared variables, pointers, and function parameters.
 4. **Never introduce blocking delays** in any `bsp_*_service()` or `app_*_run()` service slices; use `u4t_now - u4t_last_ms >= INTERVAL` timestamping.
 5. **Always preserve I2C bus recovery protections** whenever touching `Src/bsp_oled.c`.

@@ -30,9 +30,10 @@
 /* Named Constants (Rule 5 & Rule 10) */
 #define SCB_CPACR_CP10_FULL_ACCESS  (3UL << 20U)
 #define SCB_CPACR_CP11_FULL_ACCESS  (3UL << 22U)
+#define HSI_CLOCK_HZ                (16000000U)    /* Default internal 16 MHz oscillator */
 
 /* System Clock definition required by CMSIS */
-uint32_t SystemCoreClock = 16000000U;
+uint32_t SystemCoreClock = HSI_CLOCK_HZ;
 
 int main(void)
 {
@@ -49,13 +50,7 @@ int main(void)
     bsp_timer_init();    /* TIM3 1ms Periodic Interrupt & TRGO Trigger */
     bsp_oled_init();     /* 1.30" I2C OLED with DMA1 Stream 6 Channel 1 */
 
-    /* 2. Initialize and Run Main Synthesizer Application Layer */
+    /* 2. Initialize and Run Main Synthesizer Application Layer (app_synth_run() never returns) */
     app_synth_init();
     app_synth_run();
-
-    /* Should never reach here */
-    while (1 != 0)
-    {
-        /* Infinite loop for safety */
-    }
 }

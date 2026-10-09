@@ -21,6 +21,9 @@
 #define PORTB_LED_MODE_MASK     (3UL << (LED_GREEN_PIN * 2U))
 #define PORTB_LED_OUTPUT_MODE   (1UL << (LED_GREEN_PIN * 2U))
 #define BSRR_RESET_SHIFT        (16U)
+#define KEYMASK_POS_KEY2        (1U)       /* Bit positions in bsp_gpio_read_keys() result */
+#define KEYMASK_POS_KEY3        (2U)
+#define KEYMASK_POS_KEY4        (3U)
 #define KEY1_MODE_MASK          (3UL << (KEY1_PIN * 2U))
 #define KEY1_PULL_UP            (1UL << (KEY1_PIN * 2U))
 #define PORTB_KEYS_MODE_MASK    ((3UL << (KEY2_PIN * 2U)) | (3UL << (KEY3_PIN * 2U)) | (3UL << (KEY4_PIN * 2U)))
@@ -69,9 +72,9 @@ uint8_t bsp_gpio_read_keys(void)
     uint32_t u4t_b = ~GPIOB->IDR;
 
     return (uint8_t)(((u4t_a >> KEY1_PIN) & 1U) |
-                     (((u4t_b >> KEY2_PIN) & 1U) << 1U) |
-                     (((u4t_b >> KEY3_PIN) & 1U) << 2U) |
-                     (((u4t_b >> KEY4_PIN) & 1U) << 3U));
+                     (((u4t_b >> KEY2_PIN) & 1U) << KEYMASK_POS_KEY2) |
+                     (((u4t_b >> KEY3_PIN) & 1U) << KEYMASK_POS_KEY3) |
+                     (((u4t_b >> KEY4_PIN) & 1U) << KEYMASK_POS_KEY4));
 }
 
 bool bsp_gpio_read_joystick_switch(void)
@@ -79,16 +82,26 @@ bool bsp_gpio_read_joystick_switch(void)
     return ((GPIOC->IDR & (1UL << JOY_SW_PIN)) == 0U);
 }
 
-/* Set all 4 LEDs at once from a mask (LED_MASK_*): set bits ON, cleared bits OFF, via atomic BSRR writes */
+/* Turn one LED on or off through its port's BSRR (low half = set pin, high half = reset pin) */
+static void gpio_led_write(GPIO_TypeDef *p_port, uint32_t u4t_pin, bool b_on)
+{
+    if (b_on == true)
+    {
+        p_port->BSRR = (1UL << u4t_pin);
+    }
+    else
+    {
+        p_port->BSRR = (1UL << (u4t_pin + BSRR_RESET_SHIFT));
+    }
+}
+
+/* Set all 4 LEDs from a mask (LED_MASK_*): a set bit turns its LED on, a cleared bit turns it off */
 void bsp_gpio_leds_set(uint8_t u1t_mask)
 {
-    uint32_t u4t_a_on = (((uint32_t)u1t_mask & LED_MASK_BLUE) << LED_BLUE_PIN) |
-                        ((((uint32_t)u1t_mask & LED_MASK_RED) >> 1U) << LED_RED_PIN) |
-                        ((((uint32_t)u1t_mask & LED_MASK_YELLOW) >> 2U) << LED_YELLOW_PIN);
-    uint32_t u4t_b_on = (((uint32_t)u1t_mask & LED_MASK_GREEN) >> 3U) << LED_GREEN_PIN;
-
-    GPIOA->BSRR = u4t_a_on | ((PORTA_LEDS_BITS & ~u4t_a_on) << BSRR_RESET_SHIFT);
-    GPIOB->BSRR = u4t_b_on | ((PORTB_LED_BIT & ~u4t_b_on) << BSRR_RESET_SHIFT);
+    gpio_led_write(GPIOA, LED_BLUE_PIN, ((u1t_mask & LED_MASK_BLUE) != 0U));
+    gpio_led_write(GPIOA, LED_RED_PIN, ((u1t_mask & LED_MASK_RED) != 0U));
+    gpio_led_write(GPIOA, LED_YELLOW_PIN, ((u1t_mask & LED_MASK_YELLOW) != 0U));
+    gpio_led_write(GPIOB, LED_GREEN_PIN, ((u1t_mask & LED_MASK_GREEN) != 0U));
 }
 
 bool bsp_gpio_get_exti_flag(void)
@@ -108,5 +121,9 @@ void EXTI2_IRQHandler(void)
     {
         EXTI->PR = EXTI_LINE_2_MASK;    /* Write 1 to clear pending */
         g_b_joy_sw_exti_flag = true;
+    }
+    else
+    {
+        /* No action required */
     }
 }

@@ -149,7 +149,7 @@ Headers (Inc/*.h)	210	110	-100	-47.6%	มาโครที่ไม่ได้
 ## 4. Why Lines Grew in Pass 1 & How to Fix in Pass 2
 - **Pass 1 Issue**: Pass 1 replaced the algorithm (Taylor polynomial -> Q12 LUT table, pixel loop -> byte stride), but left all the verbose FSM wrappers, large comments, and added MISRA boilerplate (`else { /* ... */ }` on every `if`). This caused line count to increase by +74 lines to 3,284 lines.
 - **Pass 2 Remedy**:
-  1. `Src/app_synth.c`: Collapse the 8 individual sequencer start/stop/toggle functions into unified state transitions. Remove redundant empty `else` blocks that are not required by MISRA-C Rule 19 (Rule 19 only applies to `if ... else if`).
+  1. `Src/app_synth.c`: Collapse the 8 individual sequencer start/stop/toggle functions into unified state transitions. (Note: the original plan to remove empty `else` blocks was WRONG for this course - the Toyota skill file requires an `else` after every `if`; they were restored.)
   2. `Src/bsp_oled.c`: Format `OLED_FONT5X7` compactly (pack 4 chars per line, saving ~50 lines). Streamline `oled_i2c_bus_recovery` and low-level I2C timeout loops.
   3. `Src/bsp_gpio.c`: Replace the 45-line `if-else` cascade in `bsp_gpio_read_keys()` with branchless bitwise reading (saves ~35 lines).
   4. `Src/bsp_joystick.c`: Streamline the switch debounce state machine.
@@ -157,10 +157,11 @@ Headers (Inc/*.h)	210	110	-100	-47.6%	มาโครที่ไม่ได้
 ---
 
 ## 5. Pass 2 Result (Claude Code)
-- Total: **3,284 -> 2,034 lines (-38%)**. See `CLAUDE.md` "Current Status" for the per-file table.
+- Total: **3,284 -> 2,331 lines (-29%)** after the Toyota rule fixes. See `CLAUDE.md` "Current Status" for the per-file table.
+- Toyota rule fixes: `else` added after all 55 single `if`s (Rule 19), magic numbers replaced by `#define`s (Rule 5), unreachable loop in `main` and dead branch in `bsp_buzzer_set_tone` removed (Rule 7), and 4 tricks rewritten plainly (triangle LFO, LED mask shifts, `oled_wait` bool comparison, XOR debounce).
 - Build 0 errors / 0 compiler warnings; `verify_misra.py` 0 violations; UART (RXNE/TXE ISR) and ADC (TIM3 TRGO + DMA2) still zero polling.
 - Features kept: 8 notes + bank switch, pitch bend, vibrato, 150 ms sustain, record / loop playback, K1+K4 / K2+K3 combos, UART commands and telemetry, OLED Virtual Piano with page-byte stride.
 - Behaviour changes: combo-skew note purge only on the K1+K4 combo; toggling playback while recording saves the recording first; `c` returns to live mode before clearing; `P:+`/`P:-` pixel dot removed; OLED shows a cleared screen until the first frame; startup chime notes are all 50 ms.
 - API changes: `bsp_adc_get_raw()`, `bsp_uart_read_char()`; removed `bsp_joystick_init()` and public OLED drawing primitives.
-- ~1,605 was not reached; it needs feature removal or relaxing the brace rule (user decision pending).
+- ~1,605 was not reached; it needs feature removal (user decision pending).
 - Not yet verified on hardware.

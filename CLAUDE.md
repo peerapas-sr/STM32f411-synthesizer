@@ -34,12 +34,12 @@ py C:\Users\books\.gemini\antigravity\brain\e254b936-2c29-49a3-84b3-f1b8ce12efe6
 7. **Software Architecture**: Clean separation between Application Layer (`app_synth`) and Driver Layer (`bsp_*`).
 
 ## Current Status (Pass 2 Condensation - Done, not yet tested on hardware)
-Option A condensation is complete: **3,284 -> 1,992 lines (-40%)**, measured by `verify_misra.py` (Src + Inc, excluding syscalls/sysmem).
+Option A condensation is complete: **3,284 -> 1,993 lines (-40%)**, measured by `verify_misra.py` (Src + Inc, excluding syscalls/sysmem).
 Build: 0 errors, 0 compiler warnings (4 newlib `_close/_write ... not implemented` linker notes are pre-existing). MISRA script: 0 violations.
 
 | Module / File | Before | After | Notes |
 |:---|:---:|:---:|:---|
-| `Src/app_synth.c` | 1,030 | 636 | One mode FSM (`synth_set_mode` / `synth_toggle_mode`), merged debounce + combos (`synth_scan_keys`), UART telemetry kept |
+| `Src/app_synth.c` | 1,030 | 637 | One mode FSM (`synth_set_mode` / `synth_toggle_mode`), merged debounce + combos (`synth_scan_keys`), UART telemetry kept |
 | `Src/bsp_oled.c` | 1,029 | 501 | Font packed 4 glyphs/line, single bounded `oled_wait()`, primitives file-private; recovery, keep-alive, DMA watchdog kept |
 | `Src/bsp_joystick.c` | 218 | 116 | Flat switch FSM, boot guard via initial state, no init function |
 | `Src/bsp_gpio.c` | 156 | 102 | Branchless `bsp_gpio_read_keys()`, LED via BSRR |
@@ -47,7 +47,7 @@ Build: 0 errors, 0 compiler warnings (4 newlib `_close/_write ... not implemente
 | `Src/bsp_uart.c` | 189 | 137 | `bsp_uart_read_char(&c)` replaces `has_rx_char/get_rx_char`; `send_char` is private |
 | buzzer + timer + main | 264 | 247 | Empty `else` blocks removed |
 | Headers | 203 | 168 | Unused APIs removed |
-| **Total** | **3,284** | **1,992** | **-40%** |
+| **Total** | **3,284** | **1,993** | **-40%** |
 
 ### Why not ~1,605
 About 30% of every file is lone `{` / `}` lines required by the brace rule (e.g. 179 of `app_synth.c`'s lines before logs were restored).

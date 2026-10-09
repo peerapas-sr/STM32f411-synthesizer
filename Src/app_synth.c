@@ -19,6 +19,7 @@
 #define SYNTH_NUM_KEYS              (4U)
 #define SYNTH_NUM_COMBOS            (2U)
 #define SYNTH_NOTE_SOL              (4U)
+#define CHIME_NUM_NOTES             (3U)
 #define SYNTH_HIGH_BANK_OFFSET      (4)
 #define JOY_HIGH_BANK_THRESHOLD     (-350)
 #define JOY_NORM_FULL               (1000)
@@ -576,9 +577,9 @@ static void synth_handle_uart_rx(uint32_t u4t_now)
 void app_synth_init(void)
 {
     bsp_uart_send_string("\r\n=== STM32 Synthesizer (C7-C8 + OLED) | 115200 bps | '?' for Help ===\r\n");
-    for (uint8_t u1t_i = 0U; u1t_i <= SYNTH_NOTE_SOL; u1t_i += 2U)
+    for (uint8_t u1t_i = 0U; u1t_i < CHIME_NUM_NOTES; u1t_i++)
     {
-        bsp_buzzer_set_tone(NOTE_FREQ[u1t_i], TONE_VOL_RAW);    /* DO-MI-SOL startup chime */
+        bsp_buzzer_set_tone(NOTE_FREQ[u1t_i * 2U], TONE_VOL_RAW);    /* DO-MI-SOL startup chime */
         bsp_delay_ms(TONE_STEP_MS);
     }
     bsp_buzzer_off();

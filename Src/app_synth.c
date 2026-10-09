@@ -749,19 +749,51 @@ void app_synth_run(void)
         bsp_joystick_service(u4t_now);    /* Joystick axes + SW events from EXTI2 */
         synth_handle_uart_rx(u4t_now);
 
-        /* Joystick SW: short press ends recording / toggles playback, long press toggles recording */
+        /* Joystick SW: strictly adhere to the state diagram transitions:
+         *   LIVE      <-- Long Press (>= 600 ms) --> RECORDING
+         *   LIVE      <-- Short Press (< 600 ms) --> PLAYING
+         */
         joy_evt = bsp_joystick_get_event();
-        if ((joy_evt == JOY_SW_EVT_LONG_PRESS) || ((joy_evt == JOY_SW_EVT_SHORT_PRESS) && (g_mode == MODE_RECORDING)))
+        if (g_mode == MODE_LIVE)
         {
-            synth_toggle_mode(MODE_RECORDING, u4t_now);
+            if (joy_evt == JOY_SW_EVT_LONG_PRESS)
+            {
+                synth_set_mode(MODE_RECORDING, u4t_now);
+            }
+            else if (joy_evt == JOY_SW_EVT_SHORT_PRESS)
+            {
+                synth_set_mode(MODE_PLAYING, u4t_now);
+            }
+            else
+            {
+                /* No switch event */
+            }
         }
-        else if (joy_evt == JOY_SW_EVT_SHORT_PRESS)
+        else if (g_mode == MODE_RECORDING)
         {
-            synth_toggle_mode(MODE_PLAYING, u4t_now);
+            if (joy_evt == JOY_SW_EVT_LONG_PRESS)
+            {
+                synth_set_mode(MODE_LIVE, u4t_now);
+            }
+            else
+            {
+                /* Short press ignored during recording */
+            }
+        }
+        else if (g_mode == MODE_PLAYING)
+        {
+            if (joy_evt == JOY_SW_EVT_SHORT_PRESS)
+            {
+                synth_set_mode(MODE_LIVE, u4t_now);
+            }
+            else
+            {
+                /* Long press does not transition to recording */
+            }
         }
         else
         {
-            /* No switch event */
+            /* No action required */
         }
 
         /* Sample inputs once per superloop pass, then update sound, recorder and display */

@@ -34,21 +34,21 @@ py C:\Users\books\.gemini\antigravity\brain\e254b936-2c29-49a3-84b3-f1b8ce12efe6
 7. **Software Architecture**: Clean separation between Application Layer (`app_synth`) and Driver Layer (`bsp_*`).
 
 ## Current Status (Pass 2 + Toyota rule fixes + CMSIS register names - not yet tested on hardware)
-Codebase: **3,284 -> 2,359 lines (-28%)**, measured by `verify_misra.py` (Src + Inc, excluding syscalls/sysmem).
+Codebase: **3,284 -> 2,361 lines (-28%)**, measured by `verify_misra.py` (Src + Inc, excluding syscalls/sysmem).
 Build: 0 errors, 0 compiler warnings (4 newlib `_close/_write ... not implemented` linker notes are pre-existing).
 `verify_misra.py`: 0 violations. `.agents/skills/toyota-misra-c/scripts/audit_misra.py`: all 9 source files PASS.
 
 | Module / File | Before | After | Notes |
 |:---|:---:|:---:|:---|
-| `Src/app_synth.c` | 1,030 | 790 | One mode FSM (`synth_set_mode` / `synth_toggle_mode`), debounce + combos (`synth_scan_keys`), UART telemetry, LED display |
+| `Src/app_synth.c` | 1,030 | 792 | One mode FSM (`synth_set_mode` / `synth_toggle_mode`), debounce + combos (`synth_scan_keys`), UART telemetry, LED display |
 | `Src/bsp_oled.c` | 1,029 | 585 | Font packed 4 glyphs/line, bounded `oled_wait_set()` / `oled_wait_clear()`, primitives file-private; recovery, keep-alive, DMA watchdog kept |
-| `Src/bsp_joystick.c` | 218 | 136 | Switch FSM driven by EXTI2 edges (30 ms debounce, then one level read), boot guard via initial state |
+| `Src/bsp_joystick.c` | 218 | 137 | Switch FSM driven by EXTI2 edges (30 ms debounce, then one level read), boot guard via initial state |
 | `Src/bsp_gpio.c` | 156 | 166 | Plain if/else `bsp_gpio_read_keys()` (`KEY_MASK_*`), 4 LEDs via `bsp_gpio_leds_set()` (BSx / BRx) |
-| `Src/bsp_adc.c` | 195 | 93 | `bsp_adc_get_raw(ADC_IDX_*)` replaces `bsp_adc_get_joystick_raw()` |
+| `Src/bsp_adc.c` | 195 | 92 | `bsp_adc_get_raw(ADC_IDX_*)` replaces `bsp_adc_get_joystick_raw()` |
 | `Src/bsp_uart.c` | 189 | 163 | `bsp_uart_read_char(&c)` replaces `has_rx_char/get_rx_char`; `send_char` is private |
 | buzzer + timer + main | 264 | 245 | CMSIS register names, dead branch removed |
 | Headers | 203 | 181 | Unused APIs removed |
-| **Total** | **3,284** | **2,359** | **-28%** |
+| **Total** | **3,284** | **2,361** | **-28%** |
 
 ### Toyota rule interpretation used in this project (from the course skill file)
 - **Rule 19**: every `if` ends with an `else` (single `if` too, not only `if ... else if`). Empty branches use `else { /* No action required */ }`.

@@ -15,8 +15,6 @@
 #define ADC_CH4_PA4                 (4UL)
 #define ADC_CH10_PC0                (10UL)
 #define ADC_CH11_PC1                (11UL)
-#define ADC_EXTSEL_TIM3_TRGO        (8UL)      /* EXTSEL = 1000: TIM3 TRGO */
-#define ADC_EXTEN_RISING            (1UL)      /* EXTEN = 01: rising edge */
 #define ADC_VOL_MUTE_THRESHOLD      (80U)
 #define ADC_MAX_VALUE               (4095U)
 #define PERCENT_MAX                 (100U)
@@ -55,7 +53,8 @@ void bsp_adc_init(void)
     ADC1->SQR1 = ((ADC_NUM_CHANNELS - 1UL) << ADC_SQR1_L_Pos);
     ADC1->SQR3 = ((ADC_CH4_PA4 << ADC_SQR3_SQ1_Pos) | (ADC_CH10_PC0 << ADC_SQR3_SQ2_Pos) | (ADC_CH11_PC1 << ADC_SQR3_SQ3_Pos));
     ADC1->CR1 |= ADC_CR1_SCAN;
-    ADC1->CR2 = ((ADC_EXTSEL_TIM3_TRGO << ADC_CR2_EXTSEL_Pos) | (ADC_EXTEN_RISING << ADC_CR2_EXTEN_Pos) |
+    ADC1->CR2 = (ADC_CR2_EXTSEL_3 |    /* EXTSEL = 1000: TIM3 TRGO */
+                 ADC_CR2_EXTEN_0 |     /* EXTEN = 01: rising edge */
                  ADC_CR2_DMA | ADC_CR2_DDS | ADC_CR2_ADON);
 }
 

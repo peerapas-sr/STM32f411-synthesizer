@@ -25,8 +25,8 @@
 #define JOY_HIGH_BANK_THRESHOLD     (-350)
 #define JOY_NORM_FULL               (1000)
 #define OLED_RENDER_INTERVAL_MS     (30U)
-#define KEY_COMBO_REC_MASK          (0x09U)    /* K1 + K4 held 600 ms: toggle recording */
-#define KEY_COMBO_PLAY_MASK         (0x06U)    /* K2 + K3 held 600 ms: toggle playback */
+#define KEY_COMBO_REC_MASK          (KEY_MASK_1 | KEY_MASK_4)    /* Held 600 ms: toggle recording */
+#define KEY_COMBO_PLAY_MASK         (KEY_MASK_2 | KEY_MASK_3)    /* Held 600 ms: toggle playback */
 #define KEY_LOCKOUT_MS              (20U)
 #define COMBO_HOLD_MS               (600U)
 #define COMBO_SKEW_WINDOW_MS        (700U)
@@ -82,6 +82,8 @@ static const uint16_t PITCH_RATIO_Q12[PITCH_TABLE_LAST_IDX + 1U] = {
     4156U, 4216U, 4277U, 4340U, 4403U, 4467U, 4532U, 4598U, 4664U, 4732U
 };
 static const uint8_t COMBO_MASK[SYNTH_NUM_COMBOS] = {KEY_COMBO_REC_MASK, KEY_COMBO_PLAY_MASK};
+static const uint8_t KEY_BIT[SYNTH_NUM_KEYS] = {KEY_MASK_1, KEY_MASK_2, KEY_MASK_3, KEY_MASK_4};
+static const uint8_t KEY_LED[SYNTH_NUM_KEYS] = {LED_MASK_BLUE, LED_MASK_RED, LED_MASK_YELLOW, LED_MASK_GREEN};
 
 /* Sequencer / Recorder / Playback State (g_s1t_rec_note < 0: no note being recorded) */
 static synth_step_t  g_sequence[SYNTH_MAX_STEPS];
@@ -266,7 +268,7 @@ static bool synth_scan_keys(uint32_t u4t_now)
 
     for (uint8_t u1t_i = 0U; u1t_i < SYNTH_NUM_KEYS; u1t_i++)
     {
-        uint8_t u1t_bit = (uint8_t)(1U << u1t_i);
+        uint8_t u1t_bit = KEY_BIT[u1t_i];
         bool b_raw_pressed = ((u1t_raw & u1t_bit) != 0U);
         bool b_was_pressed = ((g_u1t_keys & u1t_bit) != 0U);
 
@@ -342,7 +344,7 @@ static int8_t synth_read_active_note(bool b_combo_held, int32_t s4t_norm_y, uint
     }
     for (uint8_t u1t_i = 0U; (u1t_i < SYNTH_NUM_KEYS) && (s1t_note < 0); u1t_i++)
     {
-        if ((g_u1t_keys & (1U << u1t_i)) != 0U)
+        if ((g_u1t_keys & KEY_BIT[u1t_i]) != 0U)
         {
             s1t_note = (int8_t)((int8_t)u1t_i + s1t_bank);
         }
@@ -606,7 +608,7 @@ static void synth_update_leds(int8_t s1t_note, uint32_t u4t_now)
     }
     else if (s1t_key >= 0)
     {
-        u1t_mask = (uint8_t)(1U << ((uint8_t)s1t_key % SYNTH_NUM_KEYS));
+        u1t_mask = KEY_LED[(uint8_t)s1t_key % SYNTH_NUM_KEYS];    /* Notes 0-3 and 4-7 share the 4 key LEDs */
     }
     else
     {

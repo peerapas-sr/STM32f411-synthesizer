@@ -11,11 +11,12 @@
 #include "bsp_gpio.h"
 
 /* Named Constants (Rule 5 & Rule 10) */
+#define JOY_ADC_MAX             (4095)
 #define JOY_CENTER_VAL          (2048)
 #define JOY_DEADZONE_COUNTS     (160)
 #define JOY_NORM_MAX            (1000)
-#define JOY_SPAN_POS            (1887)    /* 4095 - (2048 + 160) */
-#define JOY_SPAN_NEG            (1888)    /* 2048 - 160 */
+#define JOY_SPAN_POS            (JOY_ADC_MAX - JOY_CENTER_VAL - JOY_DEADZONE_COUNTS)    /* Counts above the deadzone */
+#define JOY_SPAN_NEG            (JOY_CENTER_VAL - JOY_DEADZONE_COUNTS)                  /* Counts below the deadzone */
 #define JOY_EMA_WEIGHT_PREV     (3U)
 #define JOY_EMA_WEIGHT_DIV      (4U)
 #define SW_DEBOUNCE_MS          (30U)

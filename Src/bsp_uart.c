@@ -1,24 +1,31 @@
 /*******************************************************************************
  * File Name   : bsp_uart.c
- * Description : USART2 Driver - Interrupt RX and Polling TX with Timeout
+ * Description : USART2 Driver - 100% Interrupt-Driven TX & RX (Zero Polling)
  * Target MCU  : STM32F411RET6
  * Standard    : Toyota Embedded MISRA-C Compliant (22 Rules)
  ******************************************************************************/
 
 #include "bsp_uart.h"
+#ifndef STM32F411xE
 #define STM32F411xE
+#endif
 #include "stm32f4xx.h"
 
 /* Named Constants (Rule 5 & Rule 10) */
 #define UART_RX_BUFFER_SIZE     (64U)
+#define UART_TX_BUFFER_SIZE     (256U)
 #define USART2_BRR_115200       (139U)
-#define UART_TX_TIMEOUT         (100000U)
-#define USART2_NVIC_PRIORITY    (1U)
+#define USART2_NVIC_PRIORITY    (2U)
 
 /* Circular RX buffer managed by Interrupt Service Routine */
-static volatile char    g_u1t_rx_buffer[UART_RX_BUFFER_SIZE];
-static volatile uint8_t g_u1t_rx_head = 0U;
-static volatile uint8_t g_u1t_rx_tail = 0U;
+static volatile char     g_u1t_rx_buffer[UART_RX_BUFFER_SIZE];
+static volatile uint8_t  g_u1t_rx_head = 0U;
+static volatile uint8_t  g_u1t_rx_tail = 0U;
+
+/* Circular TX buffer managed by Interrupt Service Routine */
+static volatile char     g_u1t_tx_buffer[UART_TX_BUFFER_SIZE];
+static volatile uint16_t g_u2t_tx_head = 0U;
+static volatile uint16_t g_u2t_tx_tail = 0U;
 
 void bsp_uart_init(void)
 {
@@ -49,33 +56,36 @@ void bsp_uart_init(void)
     NVIC_EnableIRQ(USART2_IRQn);
 }
 
-/* Transmit a single character */
-void bsp_uart_send_char(char c)
+/* Transmit a single character via TX Ring Buffer and TXE Interrupt (Zero Polling) */
+void bsp_uart_send_char(char c_val)
 {
-    uint32_t u4t_timeout = UART_TX_TIMEOUT;
-    while (((USART2->SR & USART_SR_TXE) == 0U) && (u4t_timeout > 0U))
+    uint16_t u2t_next_head = (uint16_t)((g_u2t_tx_head + 1U) % UART_TX_BUFFER_SIZE);
+
+    /* Enqueue character if space is available */
+    if (u2t_next_head != g_u2t_tx_tail)
     {
-        u4t_timeout--;
-    }
-    if (u4t_timeout > 0U)
-    {
-        USART2->DR = (uint8_t)c;
+        g_u1t_tx_buffer[g_u2t_tx_head] = c_val;
+        g_u2t_tx_head = u2t_next_head;
+
+        /* Enable TXE interrupt: ISR will shift byte out to USART_DR automatically */
+        USART2->CR1 |= USART_CR1_TXEIE;
     }
     else
     {
-        /* Timeout occurred: transmission skipped */
+        /* Buffer full: drop byte to prevent corruption without blocking CPU */
     }
 }
 
 /* Transmit null-terminated string */
-void bsp_uart_send_string(const char *str)
+void bsp_uart_send_string(const char *p_str)
 {
-    if (str != (const char *)0)
+    if (p_str != (const char *)0)
     {
-        while (*str != '\0')
+        const char *p_curr = p_str;
+        while (*p_curr != '\0')
         {
-            bsp_uart_send_char(*str);
-            str++;
+            bsp_uart_send_char(*p_curr);
+            p_curr++;
         }
     }
     else
@@ -93,31 +103,32 @@ bool bsp_uart_has_rx_char(void)
 /* Read character from RX buffer */
 char bsp_uart_get_rx_char(void)
 {
-    char c = '\0';
+    char c_char = '\0';
     if (g_u1t_rx_head != g_u1t_rx_tail)
     {
-        c = g_u1t_rx_buffer[g_u1t_rx_tail];
+        c_char = g_u1t_rx_buffer[g_u1t_rx_tail];
         g_u1t_rx_tail = (uint8_t)((g_u1t_rx_tail + 1U) % UART_RX_BUFFER_SIZE);
     }
     else
     {
         /* Buffer empty */
     }
-    return c;
+    return c_char;
 }
 
-/* USART2 Interrupt Service Routine (No Polling) */
+/* USART2 Interrupt Service Routine: 100% Interrupt-Driven RX and TX */
 void USART2_IRQHandler(void)
 {
+    /* 1. Handle Receive Data Register Not Empty (RXNE) */
     if ((USART2->SR & USART_SR_RXNE) != 0U)
     {
-        char received_byte = (char)(USART2->DR & 0xFFU);
+        char c_rx_byte = (char)(USART2->DR & 0xFFU);
         uint8_t u1t_next_head = (uint8_t)((g_u1t_rx_head + 1U) % UART_RX_BUFFER_SIZE);
 
         /* Prevent buffer overflow */
         if (u1t_next_head != g_u1t_rx_tail)
         {
-            g_u1t_rx_buffer[g_u1t_rx_head] = received_byte;
+            g_u1t_rx_buffer[g_u1t_rx_head] = c_rx_byte;
             g_u1t_rx_head = u1t_next_head;
         }
         else
@@ -127,6 +138,25 @@ void USART2_IRQHandler(void)
     }
     else
     {
-        /* Other USART2 interrupt */
+        /* No RX event */
+    }
+
+    /* 2. Handle Transmit Data Register Empty (TXE) */
+    if (((USART2->SR & USART_SR_TXE) != 0U) && ((USART2->CR1 & USART_CR1_TXEIE) != 0U))
+    {
+        if (g_u2t_tx_head != g_u2t_tx_tail)
+        {
+            USART2->DR = (uint16_t)((uint8_t)g_u1t_tx_buffer[g_u2t_tx_tail]);
+            g_u2t_tx_tail = (uint16_t)((g_u2t_tx_tail + 1U) % UART_TX_BUFFER_SIZE);
+        }
+        else
+        {
+            /* Buffer empty: disable TXE interrupt */
+            USART2->CR1 &= ~USART_CR1_TXEIE;
+        }
+    }
+    else
+    {
+        /* No TX event */
     }
 }

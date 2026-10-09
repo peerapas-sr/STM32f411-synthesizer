@@ -38,4 +38,7 @@ void bsp_oled_render_piano_keyboard(int8_t s1t_active_key);
 void bsp_oled_render_header(const char *p_mode, bool b_high_bank, uint8_t u1t_vol_pct, int8_t s1t_note, int32_t s4t_cents);
 void bsp_oled_render_pitch_gauge(int32_t s4t_norm_x);
 
+/* I2C1 DMA Interrupt Service Routine */
+void DMA1_Stream6_IRQHandler(void);
+
 #endif /* BSP_OLED_H */

@@ -22,7 +22,7 @@ typedef enum {
 } joy_sw_event_t;
 
 void           bsp_joystick_init(void);
-void           bsp_joystick_service(uint32_t now_ms);
+void           bsp_joystick_service(uint32_t u4t_now);
 int32_t        bsp_joystick_get_norm_x(void);
 int32_t        bsp_joystick_get_norm_y(void);
 joy_sw_event_t bsp_joystick_get_event(void);

@@ -13,6 +13,8 @@
 #define TIM3_PRESCALER_1MHZ     (15U)
 #define TIM3_ARR_1MS            (999U)
 #define TIM3_NVIC_PRIORITY      (3U)
+#define DELAY_US_CALIB_COUNT    (1U)
+#define DELAY_MS_CALIB_COUNT    (2000U)
 
 /* Global millisecond tick counter updated by TIM3 Interrupt */
 static volatile uint32_t g_u4t_system_ms = 0U;
@@ -29,20 +31,53 @@ void bsp_timer_init(void)
     TIM3->PSC = TIM3_PRESCALER_1MHZ;
     TIM3->ARR = TIM3_ARR_1MS;
 
-    /* 3. Enable Update Interrupt */
+    /* 3. Configure Master Output Trigger (TRGO on Update Event for ADC Sampling) */
+    TIM3->CR2 &= ~TIM_CR2_MMS;
+    TIM3->CR2 |= (2UL << TIM_CR2_MMS_Pos);
+
+    /* 4. Enable Update Interrupt */
     TIM3->DIER |= TIM_DIER_UIE;
 
-    /* 4. Configure NVIC for TIM3 */
+    /* 5. Configure NVIC for TIM3 */
     NVIC_SetPriority(TIM3_IRQn, TIM3_NVIC_PRIORITY);
     NVIC_EnableIRQ(TIM3_IRQn);
 
-    /* 5. Start TIM3 Counter */
+    /* 6. Start TIM3 Counter */
     TIM3->CR1 |= TIM_CR1_CEN;
 }
 
 uint32_t bsp_timer_get_ms(void)
 {
     return g_u4t_system_ms;
+}
+
+/* Precise Software Delay Loops (Rule 11 & Rule 16) */
+void bsp_delay_us(uint32_t u4t_us)
+{
+    uint32_t u4t_us_rem = u4t_us;
+
+    while (u4t_us_rem > 0U)
+    {
+        for (volatile uint32_t u4t_i = 0U; u4t_i < DELAY_US_CALIB_COUNT; u4t_i++)
+        {
+            __NOP();
+        }
+        u4t_us_rem--;
+    }
+}
+
+void bsp_delay_ms(uint32_t u4t_ms)
+{
+    uint32_t u4t_ms_rem = u4t_ms;
+
+    while (u4t_ms_rem > 0U)
+    {
+        for (volatile uint32_t u4t_i = 0U; u4t_i < DELAY_MS_CALIB_COUNT; u4t_i++)
+        {
+            __NOP();
+        }
+        u4t_ms_rem--;
+    }
 }
 
 /* TIM3 Interrupt Service Routine */

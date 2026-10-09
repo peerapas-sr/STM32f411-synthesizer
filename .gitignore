@@ -1,4 +1,4 @@
-﻿Debug/
+Debug/
 Release/
 *.o
 *.d
@@ -7,3 +7,4 @@ Release/
 *.elf
 *.map
 *.list
+.agents/

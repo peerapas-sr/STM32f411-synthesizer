@@ -7,11 +7,12 @@
  * Requirements Satisfied:
  *   [1] GPIO                  : 4 Keys In (PA10, PB3, PB5, PB4), HW-504 SW (PC2), Red LED (PA6)
  *   [2] UART (Interrupt/DMA)  : USART2 115200 bps via RX Interrupt (NO Polling)
- *   [3] ADC (Interrupt/DMA)   : 3-Channel ADC1 via EOC Interrupt (PA4 Vol, PC0 Vx, PC1 Vy)
+ *   [3] ADC (Interrupt/DMA)   : 3-Channel ADC1 via TIM3 TRGO & DMA2 Stream 0 (Zero CPU)
  *   [4] External Interrupt    : EXTI Line 10 on PA10 [Key 1]
- *   [5] Additional Peripheral : TIM3 Hardware Timer 1ms Periodic Interrupt
+ *   [5] Additional Peripheral : TIM3 Hardware Timer 1ms Periodic Interrupt & TRGO Output
  *   [6] MISRA-C Compliance    : 22 Toyota Rules fully enforced
  *   [7] Software Structure    : Clean Separation of Application and BSP Drivers
+ *   [8] I2C DMA               : I2C1 DMA1 Stream 6 Channel 1 for OLED Framebuffer
  ******************************************************************************/
 
 #include <stdint.h>
@@ -39,12 +40,12 @@ int main(void)
 
     /* 1. Initialize Board Support Package (Drivers) */
     bsp_gpio_init();     /* 4 Keys, HW-504 SW (PC2) & EXTI10 on PA10 */
-    bsp_buzzer_init();   /* Buzzer on PC3 */
-    bsp_adc_init();      /* 3-Channel ADC1 (PA4 Vol, PC0 Vx, PC1 Vy) with EOC interrupt */
+    bsp_buzzer_init();   /* Hardware PWM Buzzer on PB7 (TIM4_CH2) */
+    bsp_adc_init();      /* 3-Channel ADC1 via TIM3 TRGO & DMA2 Stream 0 */
     bsp_joystick_init(); /* HW-504 Dual-Axis Joystick Driver */
     bsp_uart_init();     /* USART2 with RXNE Interrupt (No Polling) */
-    bsp_timer_init();    /* TIM3 1ms Hardware Timer Interrupt */
-    bsp_oled_init();     /* 1.30" I2C OLED (PB8 SCL, PB9 SDA) */
+    bsp_timer_init();    /* TIM3 1ms Periodic Interrupt & TRGO Trigger */
+    bsp_oled_init();     /* 1.30" I2C OLED with DMA1 Stream 6 Channel 1 */
 
     /* 2. Initialize and Run Main Synthesizer Application Layer */
     app_synth_init();

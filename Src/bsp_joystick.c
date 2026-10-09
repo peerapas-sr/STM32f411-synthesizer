@@ -20,6 +20,8 @@
 
 #define SW_HOLD_MS              (600U)
 #define SW_DEBOUNCE_MS          (30U)
+#define JOY_EMA_WEIGHT_PREV     (3U)
+#define JOY_EMA_WEIGHT_DIV      (4U)
 
 /* Filtering Trackers */
 static uint16_t         g_u2t_ema_x = JOY_CENTER_VAL;
@@ -93,8 +95,8 @@ static void joystick_service_axes(void)
         }
         else
         {
-            uint32_t u4t_fx = (((uint32_t)g_u2t_ema_x * 3U) + (uint32_t)u2t_raw_x) / 4U;
-            uint32_t u4t_fy = (((uint32_t)g_u2t_ema_y * 3U) + (uint32_t)u2t_raw_y) / 4U;
+            uint32_t u4t_fx = (((uint32_t)g_u2t_ema_x * JOY_EMA_WEIGHT_PREV) + (uint32_t)u2t_raw_x) / JOY_EMA_WEIGHT_DIV;
+            uint32_t u4t_fy = (((uint32_t)g_u2t_ema_y * JOY_EMA_WEIGHT_PREV) + (uint32_t)u2t_raw_y) / JOY_EMA_WEIGHT_DIV;
             g_u2t_ema_x = (uint16_t)u4t_fx;
             g_u2t_ema_y = (uint16_t)u4t_fy;
         }
@@ -109,7 +111,7 @@ static void joystick_service_axes(void)
 }
 
 /* Service SW Center Button (Short / Long Press with Boot Guard) */
-static void joystick_service_switch(uint32_t now_ms)
+static void joystick_service_switch(uint32_t u4t_now)
 {
     bool b_sw_raw = bsp_gpio_read_joystick_switch();
 
@@ -129,16 +131,16 @@ static void joystick_service_switch(uint32_t now_ms)
         if (b_sw_raw != g_b_sw_raw_prev)
         {
             g_b_sw_raw_prev = b_sw_raw;
-            g_u4t_sw_edge_time_ms = now_ms;
+            g_u4t_sw_edge_time_ms = u4t_now;
         }
-        else if ((now_ms - g_u4t_sw_edge_time_ms) >= SW_DEBOUNCE_MS)
+        else if ((u4t_now - g_u4t_sw_edge_time_ms) >= SW_DEBOUNCE_MS)
         {
             if (b_sw_raw != g_b_sw_debounced)
             {
                 g_b_sw_debounced = b_sw_raw;
                 if (g_b_sw_debounced == true)
                 {
-                    g_u4t_sw_press_start_ms = now_ms;
+                    g_u4t_sw_press_start_ms = u4t_now;
                     g_b_sw_long_fired = false;
                 }
                 else
@@ -165,7 +167,7 @@ static void joystick_service_switch(uint32_t now_ms)
 
         if ((g_b_sw_debounced == true) && (g_b_sw_long_fired == false))
         {
-            if ((now_ms - g_u4t_sw_press_start_ms) >= SW_HOLD_MS)
+            if ((u4t_now - g_u4t_sw_press_start_ms) >= SW_HOLD_MS)
             {
                 g_b_sw_long_fired = true;
                 g_joy_sw_event = JOY_SW_EVT_LONG_PRESS;
@@ -195,10 +197,10 @@ void bsp_joystick_init(void)
     g_joy_sw_event = JOY_SW_EVT_NONE;
 }
 
-void bsp_joystick_service(uint32_t now_ms)
+void bsp_joystick_service(uint32_t u4t_now)
 {
     joystick_service_axes();
-    joystick_service_switch(now_ms);
+    joystick_service_switch(u4t_now);
 }
 
 int32_t bsp_joystick_get_norm_x(void)
@@ -213,9 +215,9 @@ int32_t bsp_joystick_get_norm_y(void)
 
 joy_sw_event_t bsp_joystick_get_event(void)
 {
-    joy_sw_event_t evt = g_joy_sw_event;
+    joy_sw_event_t evt_ret = g_joy_sw_event;
     g_joy_sw_event = JOY_SW_EVT_NONE; /* Clear on read */
-    return evt;
+    return evt_ret;
 }
 
 bool bsp_joystick_is_pressed(void)

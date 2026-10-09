@@ -99,7 +99,7 @@ graph TD
 | **Key 3** | **PB5** | Input Pull-Up | Note 3 (MI / TI) & Playback Combo Key |
 | **Key 4** | **PB4** | Input Pull-Up | Note 4 (FA / HIGH DO) & Record Combo Key |
 | **Joystick SW** | **PC2** | Input Pull-Up | HW-504 Center Push Switch (Short/Long click) |
-| **Buzzer Out** | **PC3** | Output Push-Pull (High Speed) | Square-wave Audio Out with Volume Pulse Duty |
+| **Buzzer Out** | **PB7** | AF2 (TIM4_CH2, Push-Pull, High Speed) | Hardware PWM Audio Output with Cubic Volume Pulse Shaping |
 | **Red LED** | **PA6** | Output Push-Pull | Recording / Sustain / Combo Status Indicator |
 
 ---
@@ -110,12 +110,12 @@ To ensure zero audio glitching and eliminate CPU stalls, interrupts are strictly
 
 | Vector | ISR Handler | Priority | Trigger Source | Functionality |
 | :--- | :--- | :---: | :--- | :--- |
-| **`TIM4_IRQn`** | `TIM4_IRQHandler` | **1** *(Highest)* | TIM4 Update (UIF) | Microsecond half-period toggling on PC3 with zero audio jitter. |
 | **`DMA1_Stream6_IRQn`** | `DMA1_Stream6_IRQHandler` | **2** | DMA1 Transfer Complete | Releases I2C DMA lock, halts DMA, issues hardware STOP condition. |
 | **`USART2_IRQn`** | `USART2_IRQHandler` | **2** | USART2 `RXNE` | Pushes incoming bytes into a 64-byte circular ring buffer. |
 | **`EXTI15_10_IRQn`** | `EXTI15_10_IRQHandler` | **2** | PA10 Falling Edge | Latches Key 1 press event flag for the main application loop. |
 | **`TIM3_IRQn`** | `TIM3_IRQHandler` | **3** | TIM3 Update (1 kHz) | Increments system millisecond counter `g_u4t_system_ms`. |
 | *DMA2 Stream 0* | *(No Interrupt)* | — | TIM3 TRGO Pulse | **Circular Mode**: Transfers 3 ADC conversions directly into SRAM. |
+| *TIM4 Channel 2* | *(No Interrupt)* | — | Hardware Counter | **Hardware PWM**: Autonomous square-wave audio on PB7 (Zero-CPU). |
 
 ---
 
@@ -169,7 +169,7 @@ Connect a serial terminal (PuTTY, Tera Term, minicom) to the Nucleo Virtual COM 
 │   ├── main.c             # System entry point & FPU coprocessor init
 │   ├── app_synth.c        # Synthesizer application logic & sequencer FSM
 │   ├── bsp_adc.c          # ADC1 + TIM3 TRGO + DMA2 circular engine
-│   ├── bsp_buzzer.c       # TIM4 cubic volume pulse shaper (PC3)
+│   ├── bsp_buzzer.c       # Hardware PWM tone & volume pulse shaper (PB7 / TIM4_CH2)
 │   ├── bsp_gpio.c         # GPIO setup, LED control & EXTI15_10 ISR
 │   ├── bsp_joystick.c     # Joystick EMA filtering, calibration & switch FSM
 │   ├── bsp_oled.c         # 1024B Framebuffer, I2C1 bus recovery & DMA ISR

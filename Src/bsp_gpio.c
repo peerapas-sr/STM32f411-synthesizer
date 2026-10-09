@@ -94,9 +94,9 @@ bool bsp_gpio_read_joystick_switch(void)
 }
 
 /* Red LED Setter */
-void bsp_gpio_led_red_set(bool state)
+void bsp_gpio_led_red_set(bool b_state)
 {
-    if (state == true)
+    if (b_state == true)
     {
         GPIOA->ODR |= (1UL << LED_RED_PIN);
     }

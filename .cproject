@@ -78,7 +78,7 @@
 					<sourceEntries>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Inc"/>
 						<entry excluding="sysmem.c|syscalls.c|Problem3.c|LED.c|Problem2.c|Problem4.c|Template.c|KKU26_Lab5.1_6730403976_Peerapas.c|KKU26_Lab4.1_6730403976_Peerapas.c|KKU26_Lab5.3_6730403976_Peerapas.c|KKU26_Lab4.2_6730403976_Peerapas.c|KKU26_Lab5.2_6730403976_Peerapas.c|KKU26_Lab4.5_6730403976_Peerapas.c|KKU26_Lab4.3_6730403976_Peerapas.c|KKU26_Lab3.2_6730403976_peerapas.c|KKU26_Lab3.1C_6730403976_peerapas.c|KKU26_Lab3.4_6730403976_peerapas3.c|KKU26_Lab3.3_6730403976_peerapas2.c|KKU26_Lab1.5_6730403976_peerapas.c|KKU26_Lab1.4_6730403976_peerapas.c|KKU26_Lab3.1B_6730403976_peerapas.c|KKU26_Lab3.1_6730403976_peerapas.c|KKU26_Lab1.3_6730403976_peerapas.c|KKU26_Lab1.2_6730403976_peerapas.c|KKU26_Lab1.1_6730403976_peerapas.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Src"/>
-						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Startup"/>
+						<entry excluding="Src" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Startup"/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -152,7 +152,7 @@
 					<sourceEntries>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Inc"/>
 						<entry excluding="sysmem.c|syscalls.c|Problem3.c|LED.c|Problem2.c|Problem4.c|Template.c|KKU26_Lab5.1_6730403976_Peerapas.c|KKU26_Lab4.1_6730403976_Peerapas.c|KKU26_Lab5.3_6730403976_Peerapas.c|KKU26_Lab4.2_6730403976_Peerapas.c|KKU26_Lab5.2_6730403976_Peerapas.c|KKU26_Lab4.5_6730403976_Peerapas.c|KKU26_Lab4.3_6730403976_Peerapas.c|KKU26_Lab3.2_6730403976_peerapas.c|KKU26_Lab3.1C_6730403976_peerapas.c|KKU26_Lab3.4_6730403976_peerapas3.c|KKU26_Lab3.3_6730403976_peerapas2.c|KKU26_Lab1.5_6730403976_peerapas.c|KKU26_Lab1.4_6730403976_peerapas.c|KKU26_Lab3.1B_6730403976_peerapas.c|KKU26_Lab3.1_6730403976_peerapas.c|KKU26_Lab1.3_6730403976_peerapas.c|KKU26_Lab1.2_6730403976_peerapas.c|KKU26_Lab1.1_6730403976_peerapas.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Src"/>
-						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Startup"/>
+						<entry excluding="Src" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Startup"/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
